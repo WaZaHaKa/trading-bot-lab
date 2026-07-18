@@ -1,0 +1,20 @@
+# Example runtime configuration.
+# The active mode remains backtest unless historical paper replay is selected.
+
+environment: local
+trading_mode: backtest
+engine: local_python
+log_level: INFO
+
+paths:
+  data_dir: ./data
+  lean_data_dir: ./lean/data
+  reports_dir: ./reports
+  logs_dir: ./logs
+  models_dir: ./models
+
+features:
+  ml_enabled: false
+  historical_paper_replay_enabled: false
+  live_trading_enabled: false
+  monitoring_enabled: false

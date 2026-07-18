@@ -1,0 +1,24 @@
+# Example risk policy. Copy to config/risk.local.yaml for local experiments.
+# Never commit real live-trading config.
+
+allow_live_trading: false
+allow_paper_trading: false
+allow_shorting: false
+allow_leverage: false
+
+max_asset_weight: 0.10
+max_total_gross_exposure: 0.30
+max_order_notional_weight: 0.10
+max_daily_loss_pct: 0.02
+max_drawdown_pct: 0.05
+max_data_age_seconds: 300
+max_open_positions: 1
+
+allowed_symbols:
+  - SPY
+  - QQQ
+  - BTCUSD
+  - ETHUSD
+
+default_order_type: market
+kill_switch_enabled: true

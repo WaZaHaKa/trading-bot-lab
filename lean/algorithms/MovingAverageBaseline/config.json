@@ -1,0 +1,5 @@
+{
+  "algorithm-language": "Python",
+  "parameters": {},
+  "description": "Experimental long-only moving-average baseline for local backtesting only. Live trading disabled by project policy."
+}

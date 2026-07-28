@@ -421,3 +421,75 @@ yet marked superseded.
 The next safe milestone is an actual normalized LEAN trace over the committed
 synthetic fixture and a content-bound comparison. Walk-forward, optimization,
 and live-trading milestones are not approved by this result.
+
+## 2026-07-28 - Identical-data LEAN parity preparation
+
+### Hypothesis
+
+No profitability hypothesis is being tested. This sprint prepares a deterministic
+way for LEAN and the independent local Python oracle to process the same
+synthetic fixture and compare timing and accounting observations.
+
+### Asset universe and data
+
+One synthetic `PARITY` symbol over the eight committed weekday rows in
+`tests/fixtures/parity/v1/synthetic_weekdays.csv`, exact-byte SHA-256
+`a68bcf7fc30d2593b32e5a98852c4f8e0190ed99865640485b344515d9f1f78a`.
+The `1.0.0` scenario and fixture require LF bytes. Preparation copies only those
+validated bytes to ignored LEAN local data; it never downloads, purchases,
+normalizes, sorts, or repairs data.
+
+### Signal and execution
+
+`ParityFixtureV1` is fixed to and regression-tested against the existing
+versioned scenario; its financial values are not operator-tunable transport
+parameters. Trailing-only 2/3 moving-average logic requests a long or
+flat 10% target after a completed row. A row-N signal can execute only at row
+N+1 open. Future-row access, same-close execution, and a fabricated final-row
+intent or fill remain prohibited.
+
+### Risk and costs
+
+The scenario's one-basis-point fee, two-basis-point adverse slippage, integer
+quantity, eight-place money precision, nonnegative cash and quantity, 10% asset
+and order caps, 30% gross-exposure cap, 2% daily-loss halt, 5% drawdown halt,
+and deterministic long-only/no-leverage policy remain unchanged. Live mode,
+shorting, brokerage integration, and optimization are rejected.
+
+### Transport and observations
+
+Local file is the offline default. A future cloud run must explicitly select
+Object Store and the fixed non-identifying key
+`trading-bot-lab/parity/v1/synthetic_weekdays.csv`. Both modes use the same
+parser and financial logic; there is no remote URL, upload/download automation,
+or network fallback.
+
+A completed run is expected to emit one bounded canonical JSON line prefixed
+`TRADING_BOT_LAB_LEAN_PARITY_V1:`. The strict extractor rejects malformed,
+duplicate, non-finite, unversioned, identity-bearing, path-bearing, or
+credential-bearing observations before the existing comparator can use them.
+
+### Validation status
+
+Deterministic synthetic tests cover fixture identity and LF policy, malformed
+data, safe staging, both transport selections, observation extraction and
+privacy checks, next-row-open/final-row behavior, stable serialization, and
+dimension-specific comparison failures. They do not execute or impersonate
+LEAN.
+
+No local LEAN backtest, cloud command, Object Store operation, network request,
+or paid-data operation occurred. No `lean_engine_observation` has been produced.
+Execution-timing and numerical-accounting parity therefore remain
+`pending_identical_data_execution`.
+
+### Decision
+
+Research-only parity workflow prepared for review. Parity is not established,
+and the project is not a paper- or live-trading candidate.
+
+### Notes
+
+The next separately authorized step is one manual `ParityFixtureV1` LEAN run,
+strict extraction of its ignored prefixed observation, and comparison against a
+fresh local-oracle trace. Walk-forward validation, optimization, Object Store
+automation, broker paper trading, and live trading remain out of scope.

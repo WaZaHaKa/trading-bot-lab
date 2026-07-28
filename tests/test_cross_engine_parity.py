@@ -17,6 +17,7 @@ from trading_bot_lab.parity import (
     compare_parity_traces,
     write_local_parity_trace,
 )
+from trading_bot_lab.parity.compare import COMPARISON_DIMENSIONS
 from trading_bot_lab.parity.contract import (
     CONTRACT_DIRECTORY,
     decimal_string,
@@ -98,6 +99,8 @@ def test_exact_contract_fixture_matches(local_trace: dict[str, object]) -> None:
     assert comparison.candidate_provenance == "contract_fixture_not_engine_observation"
     assert comparison.bars_compared == 8
     assert comparison.fills_compared == 2
+    assert comparison.dimensions == {dimension: "matched" for dimension in COMPARISON_DIMENSIONS}
+    assert comparison.as_dict()["dimensions"] == comparison.dimensions
 
 
 def test_documented_field_tolerances_are_allowed(local_trace: dict[str, object]) -> None:
@@ -113,6 +116,64 @@ def test_documented_field_tolerances_are_allowed(local_trace: dict[str, object])
     )
 
     assert compare_parity_traces(local_trace, candidate).matched
+
+
+@pytest.mark.parametrize(
+    ("section", "index", "field", "tolerance", "epsilon", "dimension"),
+    [
+        ("bars", 4, "equity", Decimal("0.01"), Decimal("0.000000001"), "equity"),
+        (
+            "bars",
+            4,
+            "close",
+            Decimal("0.00000001"),
+            Decimal("0.000000001"),
+            "bar_visibility",
+        ),
+        (
+            "bars",
+            4,
+            "exposure_pct",
+            Decimal("0.0000001"),
+            Decimal("0.00000001"),
+            "exposure",
+        ),
+        ("bars", 4, "quantity", Decimal("0"), Decimal("1"), "position_state"),
+        ("order_intents", 0, "quantity", Decimal("0"), Decimal("1"), "position_state"),
+        ("fills", 0, "quantity", Decimal("0"), Decimal("1"), "position_state"),
+        ("trades", 0, "quantity", Decimal("0"), Decimal("1"), "position_state"),
+    ],
+)
+def test_numeric_tolerance_boundaries_are_inclusive_and_classified(
+    local_trace: dict[str, object],
+    section: str,
+    index: int,
+    field: str,
+    tolerance: Decimal,
+    epsilon: Decimal,
+    dimension: str,
+) -> None:
+    boundary = contract_candidate(local_trace)
+    original = Decimal(boundary[section][index][field])
+    boundary[section][index][field] = decimal_string(original + tolerance)
+    assert compare_parity_traces(local_trace, boundary).matched
+
+    outside = contract_candidate(local_trace)
+    outside[section][index][field] = decimal_string(original + tolerance + epsilon)
+    with pytest.raises(ParityMismatchError) as mismatch:
+        compare_parity_traces(local_trace, outside)
+    assert dimension in mismatch.value.differences_by_dimension
+
+
+def test_fee_and_direction_differences_are_reported_separately(
+    local_trace: dict[str, object],
+) -> None:
+    candidate = contract_candidate(local_trace)
+    candidate["fills"][0]["fee"] = decimal_string(Decimal(candidate["fills"][0]["fee"]) + 1)
+    candidate["fills"][0]["side"] = "sell"
+    with pytest.raises(ParityMismatchError) as mismatch:
+        compare_parity_traces(local_trace, candidate)
+    assert set(mismatch.value.differences_by_dimension) == {"fees", "trade_direction_and_count"}
 
 
 @pytest.mark.parametrize(

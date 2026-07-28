@@ -20,6 +20,25 @@ from trading_bot_lab.parity.contract import (
     parse_decimal_string,
 )
 
+COMPARISON_DIMENSIONS = (
+    "fixture_identity",
+    "bar_visibility",
+    "signal_timing",
+    "intent_timing",
+    "fill_timing",
+    "trade_direction_and_count",
+    "position_state",
+    "fees",
+    "slippage",
+    "cash",
+    "realized_unrealized_pnl",
+    "equity",
+    "exposure",
+    "drawdown",
+    "final_bar_behavior",
+    "rejection_and_halt_state",
+)
+
 
 class ParityValidationError(ValueError):
     """Raised when a trace is malformed or not bound to the selected contract."""
@@ -30,7 +49,14 @@ class ParityMismatchError(AssertionError):
 
     def __init__(self, differences: list[str]) -> None:
         self.differences = tuple(differences)
-        super().__init__("parity mismatch:\n- " + "\n- ".join(differences))
+        grouped = _group_differences(differences)
+        self.differences_by_dimension = {
+            dimension: tuple(values) for dimension, values in grouped.items()
+        }
+        labelled: list[str] = []
+        for dimension, values in grouped.items():
+            labelled.extend(f"[{dimension}] {value}" for value in values)
+        super().__init__("parity mismatch:\n- " + "\n- ".join(labelled))
 
 
 @dataclass(frozen=True)
@@ -45,6 +71,7 @@ class ParityComparison:
     fills_compared: int
     risk_decisions_compared: int
     tolerances: dict[str, str]
+    dimensions: dict[str, str]
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -53,6 +80,7 @@ class ParityComparison:
             "fills_compared": self.fills_compared,
             "intents_compared": self.intents_compared,
             "matched": self.matched,
+            "dimensions": dict(sorted(self.dimensions.items())),
             "risk_decisions_compared": self.risk_decisions_compared,
             "scenario_id": self.scenario_id,
             "tolerances": dict(sorted(self.tolerances.items())),
@@ -201,6 +229,21 @@ def compare_parity_files(
     return compare_parity_traces(local, candidate, scenario_path=scenario_path)
 
 
+def validate_parity_candidate_trace(
+    candidate: dict[str, Any],
+    *,
+    scenario_path: str | Path = DEFAULT_SCENARIO_PATH,
+) -> None:
+    """Validate one candidate against the selected immutable v1 contract."""
+
+    try:
+        contract = load_contract_bundle()
+        scenario = load_scenario_bundle(scenario_path)
+        _validate_trace(candidate, role="candidate", contract=contract, scenario=scenario)
+    except ParityContractError as exc:
+        raise ParityValidationError(str(exc)) from exc
+
+
 def compare_parity_traces(
     local: dict[str, Any],
     candidate: dict[str, Any],
@@ -291,6 +334,7 @@ def compare_parity_traces(
         intents_compared=len(local["order_intents"]),
         fills_compared=len(local["fills"]),
         risk_decisions_compared=len(local["risk_decisions"]),
+        dimensions={dimension: "matched" for dimension in COMPARISON_DIMENSIONS},
         tolerances={key: str(value) for key, value in contract.contract["tolerances"].items()},
     )
 
@@ -760,10 +804,111 @@ def _validate_timestamp(value: object, field: str) -> None:
         raise ParityContractError(f"{field} must include a UTC offset")
 
 
+def _group_differences(differences: list[str]) -> dict[str, list[str]]:
+    grouped = {dimension: [] for dimension in COMPARISON_DIMENSIONS}
+    for difference in differences:
+        grouped[_classify_difference(difference)].append(difference)
+    return {dimension: values for dimension, values in grouped.items() if values}
+
+
+def _classify_difference(difference: str) -> str:
+    path = difference.split(" expected", maxsplit=1)[0]
+    if path.startswith(("contract", "scenario", "assumptions")):
+        return "fixture_identity"
+    if path.startswith("strategy"):
+        return "signal_timing"
+    if path.startswith("risk_decisions"):
+        return "rejection_and_halt_state"
+    if path.startswith("final_bar"):
+        return "final_bar_behavior"
+
+    if path.startswith("bars count"):
+        return "bar_visibility"
+    if path.startswith("order_intents count"):
+        return "intent_timing"
+    if path.startswith(("fills count", "trades count")):
+        return "trade_direction_and_count"
+
+    field = path.rsplit(".", maxsplit=1)[-1]
+    if path.startswith("bars"):
+        return {
+            "average_cost": "position_state",
+            "cash": "cash",
+            "cumulative_fees": "fees",
+            "cumulative_slippage": "slippage",
+            "daily_pnl": "realized_unrealized_pnl",
+            "drawdown": "drawdown",
+            "equity": "equity",
+            "exposure_pct": "exposure",
+            "halted": "rejection_and_halt_state",
+            "peak_equity": "equity",
+            "position_market_value": "position_state",
+            "quantity": "position_state",
+            "realized_pnl": "realized_unrealized_pnl",
+            "start_of_day_equity": "equity",
+            "target_weight_for_next_bar": "signal_timing",
+            "unrealized_pnl": "realized_unrealized_pnl",
+        }.get(field, "bar_visibility")
+    if path.startswith("order_intents"):
+        return {
+            "estimated_execution_price": "intent_timing",
+            "estimated_fee": "fees",
+            "execution_phase": "intent_timing",
+            "execution_timestamp": "intent_timing",
+            "notional": "position_state",
+            "quantity": "position_state",
+            "reference_price": "intent_timing",
+            "signal_timestamp": "signal_timing",
+            "target_weight": "signal_timing",
+        }.get(field, "trade_direction_and_count")
+    if path.startswith("fills"):
+        return {
+            "execution_phase": "fill_timing",
+            "execution_price": "slippage",
+            "fee": "fees",
+            "quantity": "position_state",
+            "reference_price": "fill_timing",
+            "slippage_cost": "slippage",
+            "timestamp": "fill_timing",
+        }.get(field, "trade_direction_and_count")
+    if path.startswith("trades"):
+        return {
+            "average_cost_after": "position_state",
+            "fill_timestamp": "fill_timing",
+            "quantity": "position_state",
+            "realized_pnl_delta": "realized_unrealized_pnl",
+            "resulting_cash": "cash",
+            "resulting_quantity": "position_state",
+            "signal_timestamp": "signal_timing",
+            "target_weight": "signal_timing",
+        }.get(field, "trade_direction_and_count")
+    if path.startswith("summary"):
+        return {
+            "average_exposure": "exposure",
+            "ending_equity": "equity",
+            "estimated_slippage_cost": "slippage",
+            "halt_reasons": "rejection_and_halt_state",
+            "max_drawdown": "drawdown",
+            "max_exposure": "exposure",
+            "number_of_fills": "trade_direction_and_count",
+            "realized_pnl": "realized_unrealized_pnl",
+            "rejected_order_count": "rejection_and_halt_state",
+            "risk_halt_triggered": "rejection_and_halt_state",
+            "starting_cash": "cash",
+            "total_fees_paid": "fees",
+            "total_return": "equity",
+            "turnover": "exposure",
+            "unrealized_pnl": "realized_unrealized_pnl",
+        }.get(field, "fixture_identity")
+    return "fixture_identity"
+
+
 __all__ = [
+    "COMPARISON_DIMENSIONS",
     "ParityComparison",
     "ParityMismatchError",
     "ParityValidationError",
     "compare_parity_files",
     "compare_parity_traces",
+    "validate_parity_candidate_trace",
 ]

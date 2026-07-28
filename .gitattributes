@@ -9,3 +9,5 @@ lean-workspace/Strategies/SkeletonBacktest/main.py text eol=lf
 lean-workspace/Strategies/SkeletonBacktest/config.json text eol=lf
 lean-workspace/Strategies/MovingAverageBaseline/main.py text eol=lf
 lean-workspace/Strategies/MovingAverageBaseline/config.json text eol=lf
+lean-workspace/Strategies/ParityFixtureV1/main.py text eol=lf
+lean-workspace/Strategies/ParityFixtureV1/config.json text eol=lf

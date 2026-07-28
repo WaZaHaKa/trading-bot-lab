@@ -4,17 +4,25 @@
 
 Market data, logs, model artifacts, and reports can become large, sensitive, licensed, or strategy-revealing. This repo ignores data directories by default.
 
-Tracked exceptions are limited to clearly labeled, tiny synthetic fixtures such
-as `data/sample/synthetic_spy_daily.csv` and the versioned parity fixture under
-`tests/fixtures/parity/`. They are for semantic smoke tests, not market research.
+Tracked exceptions are limited to clearly labelled, tiny synthetic fixtures.
+The sole parity CSV source is
+`tests/fixtures/parity/v1/synthetic_weekdays.csv`, exact-byte SHA-256
+`a68bcf7fc30d2593b32e5a98852c4f8e0190ed99865640485b344515d9f1f78a`.
+Its fixture and `1.0.0` scenario files require LF bytes. Do not commit another
+copy under a LEAN project. CRLF conversion, mutation, truncation, extra rows,
+NaN, infinity, unsorted or duplicate timestamps, and invalid OHLC relationships
+must fail rather than be normalized or repaired. These fixtures test semantics,
+not market-data quality or a strategy edge.
 
 User-provided real CSVs belong in `data/local/`. That folder exists via
 `.gitkeep`, but its contents are ignored and must not be committed.
 
 Generated report files belong under `reports/`, which is ignored except for
-`reports/.gitkeep`.
+`reports/.gitkeep`. Local-oracle traces and extracted LEAN observations remain
+ignored there until their contents are explicitly sanitized and reviewed.
 
-Structured event logs belong under ignored `logs/`. Reserved replay checkpoints
+Raw LEAN and structured event logs belong under ignored `logs/`. They must not
+be committed or treated as a normalized observation. Reserved replay checkpoints
 belong under ignored `checkpoints/`; checkpoint/restart behavior is not yet
 implemented. CLI-selected artifacts inside the repository are rejected unless
 they use the documented ignored roots.
@@ -25,11 +33,26 @@ All `lean-workspace/data/`, `storage/`/Object Store content, backtest results,
 optimizations, live output, logs, caches, and notebooks are generated/local and
 ignored. Do not copy global `.lean/` state into the repository.
 
+The offline parity preparer validates the authoritative fixture and atomically
+copies those exact LF bytes only to
+`lean-workspace/data/custom/parity/v1/synthetic_weekdays.csv`. It rejects
+symlinks, unsafe destinations, and differing existing output. It never converts,
+downloads, uploads, or repairs data.
+
+`ParityFixtureV1` defaults to that local file. A later cloud run may explicitly
+select Object Store only when an operator has manually placed the same exact
+bytes at the fixed key
+`trading-bot-lab/parity/v1/synthetic_weekdays.csv`. The repository provides no
+Object Store write, automatic upload, automatic download, remote URL, or network
+fallback. The key may not contain account, organization, project, or machine
+identity.
+
 Cloud backtests may read datasets available to the paid organization. They do
 not authorize committing or locally downloading that data. `lean data
 download`, `--download-data`, a local QuantConnect historical data provider,
 and automatic data purchasing are prohibited. Local data downloads may incur
 separate QCC costs; project policy disables them regardless of available credit.
+No such data operation was performed for the parity implementation.
 
 See `qcc-guardrails.md`.
 
@@ -41,7 +64,8 @@ data/
   sample/       # tiny committed synthetic/demo CSV only
   raw/          # vendor/exchange downloads, immutable when possible
   processed/    # normalized bars/features for local experiments
-lean/data/      # LEAN-compatible local data
+lean/data/      # preserved legacy LEAN-compatible local data
+lean-workspace/data/custom/parity/v1/  # ignored exact parity staging
 ```
 
 ## Rules
@@ -58,6 +82,8 @@ lean/data/      # LEAN-compatible local data
 - Reject blank, whitespace-padded, or duplicate headers and extra row cells.
 - Keep generated reports out of Git.
 - Keep logs, manifests, replay artifacts, and checkpoints out of Git.
+- Keep LEAN data, Object Store content, raw results, and normalized parity
+  observations ignored until a separately reviewed sanitization step.
 - Normalize all timestamps to UTC at ingestion; never guess the timezone of a
   naive timestamp.
 - Do not silently sort, deduplicate, forward-fill, interpolate, or download data.
@@ -80,6 +106,12 @@ Metadata stores lowercase exact-byte and normalized-bar SHA-256 values plus the
 safe filename only. Absolute input paths are never durable report provenance.
 Symbols use a report-safe uppercase
 domain of letters, digits, dot, underscore, colon, and hyphen.
+
+The parity preparation and LEAN custom-data boundaries apply the same principle:
+they verify the fixture's exact bytes and LF policy before parsing and bind both
+the fixture and normalized bars in the observation. Local-file versus Object
+Store transport cannot change financial semantics. A missing source or wrong
+runtime hash fails before trading logic begins.
 
 The committed synthetic file is only a deterministic fixture. It provides no
 survivorship-bias, corporate-action, delisting, exchange-calendar, or market

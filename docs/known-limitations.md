@@ -19,9 +19,22 @@
 - Synthetic parity data checks semantics only and cannot validate market-data
   quality or a strategy edge.
 - A sanitized comparator fixture is not a LEAN engine observation.
-- The committed fixture can be converted to ignored LEAN-format data, but a
-  LEAN-side normalized v1 trace producer has not yet been implemented or
-  verified. The implementation host's Docker Linux engine was unavailable.
+- The committed fixture can be validated and copied byte-for-byte to the
+  ignored LEAN custom-data path, and the dedicated project plus normalized v1
+  observation producer and extractor are implemented. They have not been
+  executed or verified by a LEAN engine.
+- Neither the default local-file transport nor the explicit Object Store
+  transport has processed the fixture in LEAN. No Object Store upload, download,
+  or read was attempted in this implementation sprint.
+- No real `TRADING_BOT_LAB_LEAN_PARITY_V1:` line or
+  `lean_engine_observation` exists. Parser and comparator fixtures prove only
+  deterministic validation behavior, not LEAN timing or accounting.
+- Observation extraction validates canonical structure, content binding, and
+  the claimed engine/provenance state; it is not cryptographic runtime
+  attestation. The operator must preserve and review the actual ignored LEAN
+  log and invocation context before treating an extracted trace as evidence.
+- The runtime LEAN version remains execution-time evidence and cannot be filled
+  from source inspection or the earlier SPY cloud record.
 - The compiler warning category `discouraged_exception_handling` remains in
   both cloud projects. It was non-fatal for these runs but has not been removed.
 - Project IDs, backtest IDs, URLs, account metadata, and raw cloud output are

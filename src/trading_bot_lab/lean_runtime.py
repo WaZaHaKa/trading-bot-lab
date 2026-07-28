@@ -31,6 +31,7 @@ EXPECTED_PLATFORM = "linux/amd64"
 EXPECTED_ARCHITECTURE = "amd64"
 EXPECTED_OS = "linux"
 EXPECTED_CLI_VERSION = "1.0.227"
+LEAN_CLI_NETWORK = "lean_cli"
 EXPECTED_UID = 1001
 ROOTLESS_SOCKET = Path(f"/run/user/{EXPECTED_UID}/docker.sock")
 ROOTLESS_HOST = f"unix://{ROOTLESS_SOCKET}"
@@ -600,6 +601,13 @@ def validate_extra_docker_config(config: Mapping[str, object]) -> None:
         raise LeanRuntimeError("extra Docker configuration differs from the runtime contract")
 
 
+def validate_lean_cli_network(name: object) -> None:
+    """Accept only the audited CLI bridge label before suppressing bridge creation."""
+
+    if name != LEAN_CLI_NETWORK:
+        raise LeanRuntimeError("LEAN attempted to select an unexpected Docker network")
+
+
 def build_isolated_environment(
     base: Mapping[str, str],
     *,
@@ -1020,8 +1028,7 @@ def install_lean_cli_runtime_guards() -> None:
         return sanitize_generated_lean_config(generated)
 
     def guarded_create_network(self: Any, name: str) -> None:
-        if name != "lean_cli_default":
-            raise LeanRuntimeError("LEAN attempted to create an unexpected Docker network")
+        validate_lean_cli_network(name)
         return None
 
     def guarded_get_client(self: Any) -> Any:
@@ -1068,8 +1075,7 @@ def install_lean_cli_runtime_guards() -> None:
         del stdout, stderr
         selected = str(image)
         validate_image_reference(selected)
-        if kwargs.pop("network", None) not in (None, "lean_cli_default"):
-            raise LeanRuntimeError("LEAN selected an unexpected Docker network")
+        validate_lean_cli_network(kwargs.pop("network", None))
         kwargs.pop("extra_hosts", None)
         kwargs.pop("networking_config", None)
         validate_container_run_kwargs(selected, kwargs, allowed_mount_roots=allowed_roots)
@@ -1142,6 +1148,7 @@ __all__ = [
     "PINNED_PLATFORM_MANIFEST_MISMATCH",
     "PLATFORM_MANIFEST_DIGEST",
     "PREPARE_AUTHORIZATION",
+    "LEAN_CLI_NETWORK",
     "PULL_AUTHORIZATION",
     "ROOTLESS_HOST",
     "ROOTLESS_SOCKET",
@@ -1177,6 +1184,7 @@ __all__ = [
     "validate_generated_engine_config",
     "validate_image_reference",
     "validate_linux_host",
+    "validate_lean_cli_network",
     "validate_local_image",
     "validate_minimal_lean_config",
     "sanitize_generated_lean_config",

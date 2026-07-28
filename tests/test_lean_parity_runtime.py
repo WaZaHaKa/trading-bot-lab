@@ -11,6 +11,7 @@ from trading_bot_lab.lean_runtime import (
     COMPARE_AUTHORIZATION,
     EXPECTED_CLI_VERSION,
     FIXTURE_SHA256,
+    LEAN_CLI_NETWORK,
     MAX_EXECUTIONS,
     MUTABLE_DISCOVERY_IMAGE,
     OCI_INDEX_DIGEST,
@@ -48,6 +49,7 @@ from trading_bot_lab.lean_runtime import (
     validate_docker_info,
     validate_generated_engine_config,
     validate_image_reference,
+    validate_lean_cli_network,
     validate_linux_host,
     validate_local_image,
     validate_minimal_lean_config,
@@ -485,6 +487,16 @@ def test_container_request_is_offline_unprivileged_and_path_bounded(tmp_path: Pa
     escaped["mounts"] = [{"Source": str(tmp_path.parent), "Target": "/LeanCLI"}]
     with pytest.raises(LeanRuntimeError):
         validate_container_run_kwargs(PINNED_IMAGE, escaped, allowed_mount_roots=(tmp_path,))
+
+
+def test_cli_bridge_label_is_audited_but_never_used_as_container_network() -> None:
+    assert LEAN_CLI_NETWORK == "lean_cli"
+    validate_lean_cli_network(LEAN_CLI_NETWORK)
+    for unexpected in (None, "", "lean_cli_default", "bridge", "host"):
+        with pytest.raises(LeanRuntimeError):
+            validate_lean_cli_network(unexpected)
+
+    assert build_extra_docker_config()["network_mode"] == "none"
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for current MVP.
+Superseded in part by ADR 0007. The local-engine safety and oracle decisions
+remain accepted; LEAN is no longer paused.
 
 ## Context
 
@@ -13,8 +14,8 @@ the owner does not want to spend money for this milestone.
 ## Decision
 
 Use a small local Python CSV backtesting harness as the active MVP path.
-Preserve the existing `lean/` folders for later, but do not continue LEAN CLI
-setup during this milestone.
+Preserve the existing `lean/` folders. ADR 0007 later activates separate LEAN
+cloud projects under `lean-workspace/` without replacing this local engine.
 
 The local MVP must remain:
 
@@ -43,10 +44,14 @@ Negative:
   broker emulator.
 - Dividends, corporate actions, point-in-time universes, exchange calendars,
   spread, market impact, and partial fills remain future work.
-- LEAN parity is deferred.
+- LEAN parity was deferred until ADR 0007.
 
 ## Follow-up
 
 ADR 0004 adds the shared event core, realistic configurable costs, stable
 reports, latched risk state, and local historical paper replay while preserving
 this no-cost decision.
+
+ADR 0007 changes the primary cross-asset research engine to LEAN cloud after a
+paid research organization became available. It preserves this local simulator
+as the independent regression/accounting oracle.

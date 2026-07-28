@@ -2,7 +2,8 @@
 
 ## Status
 
-Superseded by ADR 0003.
+Superseded for the original MVP by ADR 0003. ADR 0007 later reactivates LEAN
+cloud as the primary research/backtest engine while retaining the local oracle.
 
 ## Context
 
@@ -28,6 +29,6 @@ Negative:
 
 ## Follow-up
 
-LEAN folders are preserved, but LEAN CLI work is paused while the owner avoids
-paid QuantConnect organization requirements. See ADR 0003 and
-`docs/lean-paused.md`.
+The original `lean/` folders remain preserved. Active projects now live under
+`lean-workspace/`; live trading and the original paper-trading follow-up remain
+prohibited. See ADR 0007.

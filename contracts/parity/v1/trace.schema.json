@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "decimalString": {
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "trading-bot-lab/parity/v1/trace.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "assumptions": {"type": "object"},
+    "bars": {"items": {"type": "object"}, "type": "array"},
+    "contract": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_name": {"const": "trading_bot_lab_cross_engine_parity"},
+        "contract_sha256": {"$ref": "#/$defs/hash"},
+        "contract_version": {"const": "1.0.0"},
+        "scenario_manifest_sha256": {"$ref": "#/$defs/hash"},
+        "scenario_schema_sha256": {"$ref": "#/$defs/hash"},
+        "trace_schema_sha256": {"$ref": "#/$defs/hash"}
+      },
+      "required": [
+        "contract_name",
+        "contract_version",
+        "contract_sha256",
+        "scenario_manifest_sha256",
+        "scenario_schema_sha256",
+        "trace_schema_sha256"
+      ],
+      "type": "object"
+    },
+    "engine": {"type": "object"},
+    "fills": {"items": {"type": "object"}, "type": "array"},
+    "final_bar": {"type": "object"},
+    "order_intents": {"items": {"type": "object"}, "type": "array"},
+    "provenance": {
+      "enum": [
+        "local_python_oracle_observation",
+        "lean_engine_observation",
+        "contract_fixture_not_engine_observation"
+      ]
+    },
+    "risk_decisions": {"items": {"type": "object"}, "type": "array"},
+    "scenario": {"type": "object"},
+    "schema_version": {"const": "1.0.0"},
+    "strategy": {"type": "object"},
+    "summary": {"type": "object"},
+    "trades": {"items": {"type": "object"}, "type": "array"}
+  },
+  "required": [
+    "schema_version",
+    "contract",
+    "provenance",
+    "engine",
+    "scenario",
+    "assumptions",
+    "strategy",
+    "bars",
+    "order_intents",
+    "risk_decisions",
+    "fills",
+    "trades",
+    "summary",
+    "final_bar"
+  ],
+  "title": "Trading Bot Lab cross-engine parity trace v1",
+  "type": "object"
+}

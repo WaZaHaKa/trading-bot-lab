@@ -1,7 +1,13 @@
-# LEAN paused
+# LEAN pause decision (superseded)
 
-QuantConnect LEAN project folders remain in this repository for a future phase,
-but LEAN CLI work is paused for now.
+## Status
+
+Superseded by ADR 0007 on 2026-07-28.
+
+Current status: **LEAN active for cloud research/backtesting; live trading remains prohibited.**
+
+This document records why LEAN work was previously paused. It is retained as
+decision history and is not the current operating policy.
 
 Reason:
 
@@ -18,7 +24,11 @@ Decision:
 - Use the local CSV backtesting harness under `src/trading_bot_lab/backtesting/`
   for the next milestone.
 
-Revisit criteria:
+The revisit criteria were satisfied when the owner obtained a Quant Researcher
+subscription and approved this activation/parity sprint. The old `lean/` files
+remain preserved until cloud migration is verified.
+
+Historical revisit criteria:
 
 - The owner explicitly approves LEAN spending or a verified free local LEAN path.
 - Risk checks and local backtests are stable.

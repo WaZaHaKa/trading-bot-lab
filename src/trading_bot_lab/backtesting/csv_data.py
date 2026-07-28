@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import io
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from enum import StrEnum
@@ -17,6 +18,11 @@ from trading_bot_lab.domain import (
     MarketDataSet,
     PriceBar,
     WarningCode,
+)
+from trading_bot_lab.provenance import (
+    bars_content_sha256,
+    content_sha256,
+    safe_source_filename,
 )
 
 
@@ -46,12 +52,23 @@ class CsvDataConfig:
     gap_policy: GapPolicy = GapPolicy.WARN
 
     def __post_init__(self) -> None:
-        if self.timeframe_seconds <= 0:
-            raise ValueError("timeframe_seconds must be positive")
-        if self.max_gap_seconds is not None and self.max_gap_seconds <= 0:
-            raise ValueError("max_gap_seconds must be positive when set")
-        if self.expected_symbol is not None and not self.expected_symbol.strip():
-            raise ValueError("expected_symbol must be non-empty when set")
+        if type(self.timeframe_seconds) is not int or self.timeframe_seconds <= 0:
+            raise ValueError("timeframe_seconds must be a positive integer")
+        if self.max_gap_seconds is not None and (
+            type(self.max_gap_seconds) is not int or self.max_gap_seconds <= 0
+        ):
+            raise ValueError("max_gap_seconds must be a positive integer when set")
+        if self.expected_symbol is not None and (
+            not isinstance(self.expected_symbol, str) or not self.expected_symbol.strip()
+        ):
+            raise ValueError("expected_symbol must be a non-empty string when set")
+        try:
+            missing_volume_policy = MissingVolumePolicy(self.missing_volume_policy)
+            gap_policy = GapPolicy(self.gap_policy)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("CSV data policies must use supported policy values") from exc
+        object.__setattr__(self, "missing_volume_policy", missing_volume_policy)
+        object.__setattr__(self, "gap_policy", gap_policy)
 
 
 def load_market_data_csv(
@@ -71,31 +88,56 @@ def load_market_data_csv(
     validation = config or CsvDataConfig()
     csv_path = Path(path)
     try:
-        handle = csv_path.open(newline="", encoding="utf-8-sig")
+        raw_content = csv_path.read_bytes()
     except OSError as exc:
         raise DataValidationError(f"unable to open market-data CSV {csv_path}: {exc}") from exc
+    try:
+        decoded_content = raw_content.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise DataValidationError(f"market-data CSV {csv_path} must be valid UTF-8") from exc
+
+    source_filename = safe_source_filename(csv_path)
+    display_path = Path(source_filename)
 
     warnings: list[DataWarning] = []
-    with handle:
+    with io.StringIO(decoded_content, newline="") as handle:
         reader = csv.DictReader(handle)
-        fieldnames = set(reader.fieldnames or ())
+        raw_fieldnames = reader.fieldnames or []
+        if not raw_fieldnames or any(name is None or not name.strip() for name in raw_fieldnames):
+            raise DataValidationError(f"{display_path} has an empty CSV column name")
+        if any(name != name.strip() for name in raw_fieldnames):
+            raise DataValidationError(
+                f"{display_path} CSV column names must not contain whitespace"
+            )
+        duplicates = sorted({name for name in raw_fieldnames if raw_fieldnames.count(name) > 1})
+        if duplicates:
+            joined = ", ".join(duplicates)
+            raise DataValidationError(f"{display_path} has duplicated CSV columns: {joined}")
+        fieldnames = set(raw_fieldnames)
         missing = {"symbol", "close"} - fieldnames
         if missing:
             joined = ", ".join(sorted(missing))
-            raise DataValidationError(f"{csv_path} is missing required columns: {joined}")
+            raise DataValidationError(f"{display_path} is missing required columns: {joined}")
         timestamp_columns = {"timestamp", "date"} & fieldnames
         if len(timestamp_columns) != 1:
             raise DataValidationError(
-                f"{csv_path} must contain exactly one timestamp column: timestamp or date"
+                f"{display_path} must contain exactly one timestamp column: timestamp or date"
             )
+        if ("high" in fieldnames) != ("low" in fieldnames):
+            raise DataValidationError(f"{display_path} must contain both high and low, or neither")
 
         bars: list[MarketBar] = []
         missing_volume_seen = False
         for row_number, row in enumerate(reader, start=2):
+            if None in row:
+                raise DataValidationError(
+                    f"{display_path}:{row_number} has extra values beyond the CSV header"
+                )
             bar, missing_volume = _parse_row(
-                csv_path,
+                display_path,
                 row_number,
                 row,
+                available_columns=fieldnames,
                 timestamp_column=next(iter(timestamp_columns)),
                 timeframe_seconds=validation.timeframe_seconds,
             )
@@ -103,19 +145,19 @@ def load_market_data_csv(
                 expected = validation.expected_symbol.strip().upper()
                 if bar.symbol != expected:
                     raise DataValidationError(
-                        f"{csv_path}:{row_number} symbol {bar.symbol!r} does not match "
+                        f"{display_path}:{row_number} symbol {bar.symbol!r} does not match "
                         f"expected symbol {expected!r}"
                     )
             if missing_volume:
                 missing_volume_seen = True
                 if validation.missing_volume_policy is MissingVolumePolicy.REJECT:
-                    raise DataValidationError(f"{csv_path}:{row_number} is missing volume")
+                    raise DataValidationError(f"{display_path}:{row_number} is missing volume")
             bars.append(bar)
 
     if not bars:
-        raise DataValidationError(f"{csv_path} did not contain any market-data rows")
+        raise DataValidationError(f"{display_path} did not contain any market-data rows")
 
-    _validate_single_symbol_timeline(csv_path, bars, validation, warnings)
+    _validate_single_symbol_timeline(display_path, bars, validation, warnings)
     if missing_volume_seen and validation.missing_volume_policy is MissingVolumePolicy.WARN:
         warnings.append(
             DataWarning(
@@ -125,7 +167,9 @@ def load_market_data_csv(
         )
 
     metadata = MarketDataMetadata(
-        source=csv_path.as_posix(),
+        source=source_filename,
+        content_sha256=content_sha256(raw_content),
+        bars_sha256=bars_content_sha256(tuple(bars)),
         symbol=bars[0].symbol,
         row_count=len(bars),
         start_timestamp=bars[0].timestamp,
@@ -167,6 +211,7 @@ def _parse_row(
     row_number: int,
     row: dict[str, str],
     *,
+    available_columns: set[str],
     timestamp_column: str,
     timeframe_seconds: int,
 ) -> tuple[MarketBar, bool]:
@@ -176,9 +221,27 @@ def _parse_row(
 
     bar_timestamp = _parse_timestamp(path, row_number, row.get(timestamp_column), timestamp_column)
     close = _parse_required_positive_float(path, row_number, row.get("close"), "close")
-    open_price = _parse_optional_positive_float(path, row_number, row.get("open"), "open")
-    high = _parse_optional_positive_float(path, row_number, row.get("high"), "high")
-    low = _parse_optional_positive_float(path, row_number, row.get("low"), "low")
+    open_price = _parse_optional_positive_float(
+        path,
+        row_number,
+        row.get("open"),
+        "open",
+        required="open" in available_columns,
+    )
+    high = _parse_optional_positive_float(
+        path,
+        row_number,
+        row.get("high"),
+        "high",
+        required="high" in available_columns,
+    )
+    low = _parse_optional_positive_float(
+        path,
+        row_number,
+        row.get("low"),
+        "low",
+        required="low" in available_columns,
+    )
     volume, missing_volume = _parse_optional_volume(path, row_number, row.get("volume"))
 
     try:
@@ -237,8 +300,12 @@ def _parse_optional_positive_float(
     row_number: int,
     value: str | None,
     column: str,
+    *,
+    required: bool,
 ) -> float | None:
     if value is None or not value.strip():
+        if required:
+            raise DataValidationError(f"{path}:{row_number} has an empty {column}")
         return None
     return _parse_required_positive_float(path, row_number, value, column)
 
@@ -271,14 +338,21 @@ def _validate_single_symbol_timeline(
         raise DataValidationError(f"{path} must contain exactly one symbol; found {joined}")
 
     previous: datetime | None = None
-    for bar in bars:
+    previous_row_number: int | None = None
+    for row_number, bar in enumerate(bars, start=2):
         if previous is not None:
             if bar.timestamp == previous:
                 raise DataValidationError(
-                    f"{path} has a duplicated timestamp: {bar.timestamp.isoformat()}"
+                    f"{path}:{row_number} has a duplicated timestamp matching row "
+                    f"{previous_row_number}: "
+                    f"{bar.timestamp.isoformat()}"
                 )
             if bar.timestamp < previous:
-                raise DataValidationError(f"{path} must be sorted ascending by timestamp")
+                raise DataValidationError(
+                    f"{path}:{row_number} timestamp {bar.timestamp.isoformat()} precedes "
+                    f"row {previous_row_number} timestamp {previous.isoformat()}; "
+                    "input must be sorted ascending"
+                )
             gap_seconds = int((bar.timestamp - previous).total_seconds())
             if config.max_gap_seconds is not None and gap_seconds > config.max_gap_seconds:
                 message = (
@@ -299,6 +373,7 @@ def _validate_single_symbol_timeline(
                     )
                 )
         previous = bar.timestamp
+        previous_row_number = row_number
 
 
 __all__ = [

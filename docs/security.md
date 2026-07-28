@@ -32,7 +32,7 @@ When keys are eventually created:
 
 ## Repository rules
 
-- Keep this repository private during research.
+- Treat every tracked file, branch, pull request, and CI log as public.
 - Do not commit datasets unless licenses allow it and the data is small enough.
 - Do not commit generated model binaries.
 - Do not commit brokerage account screenshots or logs.
@@ -43,10 +43,13 @@ When keys are eventually created:
 - Do not hardcode machine-specific user paths.
 - Keep reports, logs, local data, notebook outputs, caches, package metadata,
   and model artifacts ignored.
+- Keep global `.lean/` credentials, LEAN workspace data/Object Store content,
+  cloud backtest output, optimizations, and live output outside Git.
 
 ## Active security boundary
 
-The package uses the standard library and reads only explicit local CSV paths.
+The local Python package uses the standard library and reads only explicit
+local CSV paths.
 It contains no HTTP/socket client, broker/exchange adapter, secret loader, unsafe
 deserializer, database, or arbitrary configuration evaluator. CLI arguments are
 typed and unknown fields fail through `argparse`.
@@ -58,6 +61,11 @@ a defense-in-depth heuristic, not a replacement for secret scanning or review.
 
 Structured logs serialize only engine-generated domain fields. They never read
 environment variables or configuration secrets and rotate with bounded local size.
+
+Manual LEAN CLI cloud commands are the only active network boundary. They use
+credentials stored by the CLI outside the repository, are never run by CI, and
+must remain project-scoped. Preflight reports only the path and category of a
+credential finding; it never prints the suspected value.
 
 ## Codex and AI assistant rules
 

@@ -15,17 +15,17 @@ Use Codex as a coding assistant, reviewer, and test generator. Do not use Codex 
 ## First prompt to use
 
 ```text
-We are starting a private trading bot research repository named trading-bot-lab.
+We are working in a public trading bot research repository named trading-bot-lab.
 
 Read AGENTS.md first and obey it.
 
 Goal:
-Prepare the free local CSV backtesting workflow for backtesting only.
+Prepare the LEAN cloud backtesting workflow and retain the local CSV parity oracle.
 
 Requirements:
 - Do not add secrets.
 - Do not enable live trading.
-- Do not add paid services.
+- Do not add credentials, automatic data purchases, or unbounded QCC spend.
 - Do not add AI, ML, neural networks, or reinforcement learning.
 - Verify the Python package tests pass.
 - Run `python scripts/run_local_backtest.py` against synthetic/demo data.

@@ -12,6 +12,8 @@ env/
 .pytest-tmp/
 .pytest_run/
 .pytest_tmp/
+/.pytest-*/
+/.pytest_*/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -65,6 +67,7 @@ config/*exchange*.yml
 !/data/sample/
 !/data/sample/README.md
 !/data/sample/synthetic_spy_daily.csv
+!/tests/fixtures/parity/v1/*.csv
 !/data/raw/.gitkeep
 !/data/processed/.gitkeep
 /logs/**
@@ -73,6 +76,7 @@ config/*exchange*.yml
 /reports/**
 !/reports/README.md
 !/reports/.gitkeep
+/checkpoints/**
 /models/**
 !/models/README.md
 !/models/.gitkeep
@@ -92,6 +96,48 @@ lean/storage/**
 lean/cache/**
 lean/logs/**
 lean/**/*.zip
+
+# LEAN CLI global/root state and temporary initialization
+/.lean/
+/lean.json
+/config.json
+/_lean_init_tmp/
+
+# Active LEAN organization workspace generated/local state. Project source,
+# project config, READMEs, and credential-free lean-workspace/lean.json remain trackable.
+/lean-workspace/.lean/
+/lean-workspace/data/**
+/lean-workspace/storage/**
+/lean-workspace/**/Object Store/**
+/lean-workspace/results/**
+/lean-workspace/logs/**
+/lean-workspace/cache/**
+/lean-workspace/.cache/**
+/lean-workspace/notebooks/**
+/lean-workspace/**/*.ipynb
+/lean-workspace/**/backtest/**
+/lean-workspace/**/backtests/**
+/lean-workspace/**/optimization/**
+/lean-workspace/**/optimizations/**
+/lean-workspace/**/live/**
+/lean-workspace/**/__pycache__/**
+/lean-workspace/**/*.zip
+/lean-workspace/**/*.enc
+/lean-workspace/**/*.encrypted
+/lean-workspace/**/*credentials*
+/lean-workspace/**/*secret*
+/lean-workspace/**/*api-token*
+/lean-workspace/**/*access-token*
+/lean-workspace/**/*auth-token*
+/lean-workspace/**/*authorization-token*
+/lean-workspace/**/*oauth-token*
+/lean-workspace/**/*private-key*
+/lean-workspace/**/*password*
+/lean-workspace/**/encryption-key*
+/lean-workspace/**/*.pem
+/lean-workspace/**/*.key
+/lean-workspace/**/*.p12
+/lean-workspace/**/*.pfx
 
 # OS / IDE
 .DS_Store

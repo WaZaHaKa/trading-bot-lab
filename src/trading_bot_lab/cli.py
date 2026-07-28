@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from enum import Enum
 from pathlib import Path
 
@@ -19,12 +19,19 @@ from trading_bot_lab.backtesting import (
     export_equity_csv,
     export_json_report,
     export_rejected_intents_csv,
+    export_risk_events_csv,
     export_trades_csv,
     load_market_data_csv,
     run_backtest,
 )
-from trading_bot_lab.domain import DataValidationError, PaperSessionStatus
-from trading_bot_lab.observability import StructuredEventSink
+from trading_bot_lab.domain import (
+    BacktestResult,
+    DataValidationError,
+    DataWarning,
+    PaperSessionStatus,
+    PaperSessionSummary,
+)
+from trading_bot_lab.observability import StructuredEventSink, structured_log_artifact_paths
 from trading_bot_lab.paper import (
     HistoricalReplaySession,
     PaperReplayConfig,
@@ -47,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             return _paper_replay(args)
         if args.command == "show-config":
             return _show_config()
-    except (DataValidationError, ValueError, RuntimeError) as exc:
+    except (DataValidationError, ValueError, RuntimeError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
     parser.error("a command is required")
@@ -77,11 +84,18 @@ def build_parser() -> argparse.ArgumentParser:
     _add_data_arguments(paper)
     _add_simulation_arguments(paper)
     _add_strategy_arguments(paper)
-    paper.add_argument("--replay-speed-seconds", type=float, default=0.0)
+    paper.add_argument(
+        "--replay-speed-seconds",
+        "--speed",
+        dest="replay_speed_seconds",
+        type=float,
+        default=0.0,
+    )
+    paper.add_argument("--random-seed", type=int, default=0)
     paper.add_argument("--pause-after-bars", type=int, default=None)
     paper.add_argument("--kill-switch-after-bars", type=int, default=None)
-    paper.add_argument("--export-json", type=Path, default=None)
-    paper.add_argument("--log-jsonl", type=Path, default=None)
+    paper.add_argument("--stop-after-bars", type=int, default=None)
+    _add_export_arguments(paper, paper_mode=True)
 
     subparsers.add_parser("show-config", help="Print resolved safe default configuration")
     return parser
@@ -116,6 +130,7 @@ def _add_simulation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-drawdown-limit-pct", type=float, default=5.0)
     parser.add_argument("--warmup-bars", type=int, default=0)
     parser.add_argument("--data-age-seconds", type=int, default=0)
+    parser.add_argument("--strategy-history-bars", type=int, default=10_000)
 
 
 def _add_strategy_arguments(parser: argparse.ArgumentParser) -> None:
@@ -123,8 +138,13 @@ def _add_strategy_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--slow-window", type=int, default=5)
 
 
-def _add_export_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--export-json", type=Path, default=None)
+def _add_export_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    paper_mode: bool = False,
+) -> None:
+    json_flags = ("--export-json", "--export-manifest") if paper_mode else ("--export-json",)
+    parser.add_argument(*json_flags, dest="export_json", type=Path, default=None)
     parser.add_argument(
         "--export-csv",
         "--export-equity-csv",
@@ -134,6 +154,7 @@ def _add_export_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--export-trades-csv", type=Path, default=None)
     parser.add_argument("--export-rejections-csv", type=Path, default=None)
+    parser.add_argument("--export-risk-events-csv", type=Path, default=None)
     parser.add_argument("--log-jsonl", type=Path, default=None)
 
 
@@ -151,6 +172,7 @@ def _validate_csv(args: argparse.Namespace) -> int:
 
 def _backtest(args: argparse.Namespace) -> int:
     data_path, default_path = _data_path(args.csv_path)
+    _validate_selected_artifact_paths(args, data_path=data_path)
     dataset = load_market_data_csv(data_path, config=_data_config(args))
     config = _backtest_config(args)
     policy = _risk_policy(dataset.metadata.symbol, config)
@@ -159,6 +181,8 @@ def _backtest(args: argparse.Namespace) -> int:
         slow_window=args.slow_window,
         target_weight=config.max_position_pct,
     )
+    if config.strategy_history_limit < strategy.slow_window:
+        raise ValueError("strategy_history_bars must be greater than or equal to slow_window")
     _print_resolved_config("backtest", config, policy, strategy)
     sink = StructuredEventSink(args.log_jsonl) if args.log_jsonl else None
     try:
@@ -172,8 +196,9 @@ def _backtest(args: argparse.Namespace) -> int:
             event_sink=sink,
         )
     finally:
-        if sink is not None:
-            sink.close()
+        close_warning = sink.close() if sink is not None else None
+    if close_warning is not None:
+        result = _append_result_warning(result, close_warning)
 
     _print_backtest_summary(result, data_path, default_path)
     extra_warnings = (
@@ -202,6 +227,11 @@ def _backtest(args: argparse.Namespace) -> int:
             "Wrote rejected intents CSV:",
             export_rejected_intents_csv(result, args.export_rejections_csv),
         )
+    if args.export_risk_events_csv:
+        print(
+            "Wrote risk events CSV:",
+            export_risk_events_csv(result, args.export_risk_events_csv),
+        )
     if any(
         value is not None
         for value in (
@@ -209,6 +239,7 @@ def _backtest(args: argparse.Namespace) -> int:
             args.export_equity_csv,
             args.export_trades_csv,
             args.export_rejections_csv,
+            args.export_risk_events_csv,
             args.log_jsonl,
         )
     ):
@@ -218,23 +249,54 @@ def _backtest(args: argparse.Namespace) -> int:
 
 def _paper_replay(args: argparse.Namespace) -> int:
     data_path, default_path = _data_path(args.csv_path)
+    _validate_selected_artifact_paths(args, data_path=data_path)
     dataset = load_market_data_csv(data_path, config=_data_config(args))
+    if args.pause_after_bars is not None and not 0 < args.pause_after_bars < len(dataset.bars):
+        raise ValueError("pause_after_bars must be between 1 and one less than the data row count")
     for name, value in (
-        ("pause_after_bars", args.pause_after_bars),
         ("kill_switch_after_bars", args.kill_switch_after_bars),
+        ("stop_after_bars", args.stop_after_bars),
     ):
-        if value is not None and not 0 < value < len(dataset.bars):
-            raise ValueError(f"{name} must be between 1 and one less than the data row count")
+        if value is not None and not 0 <= value < len(dataset.bars):
+            raise ValueError(f"{name} must be between 0 and one less than the data row count")
+    if args.kill_switch_after_bars is not None and args.stop_after_bars is not None:
+        raise ValueError("kill_switch_after_bars and stop_after_bars are mutually exclusive")
+    terminal_after = (
+        args.kill_switch_after_bars
+        if args.kill_switch_after_bars is not None
+        else args.stop_after_bars
+    )
+    if (
+        args.pause_after_bars is not None
+        and terminal_after is not None
+        and args.pause_after_bars > terminal_after
+    ):
+        raise ValueError("pause_after_bars cannot occur after a terminal replay control")
+    result_exports_requested = any(
+        value is not None
+        for value in (
+            args.export_equity_csv,
+            args.export_trades_csv,
+            args.export_rejections_csv,
+            args.export_risk_events_csv,
+        )
+    )
+    if terminal_after == 0 and result_exports_requested:
+        raise ValueError("result CSV exports require at least one processed replay bar")
     config = _backtest_config(args)
     policy = _risk_policy(dataset.metadata.symbol, config)
-    replay = PaperReplayConfig(args.replay_speed_seconds)
+    replay = PaperReplayConfig(args.replay_speed_seconds, args.random_seed)
     strategy = MovingAverageStrategy(
         fast_window=args.fast_window,
         slow_window=args.slow_window,
         target_weight=config.max_position_pct,
     )
+    if config.strategy_history_limit < strategy.slow_window:
+        raise ValueError("strategy_history_bars must be greater than or equal to slow_window")
     _print_resolved_config("historical_paper_replay", config, policy, strategy, replay)
     sink = StructuredEventSink(args.log_jsonl) if args.log_jsonl else None
+    failure: Exception | None = None
+    summary: PaperSessionSummary
     try:
         session = HistoricalReplaySession(
             dataset.bars,
@@ -246,28 +308,46 @@ def _paper_replay(args: argparse.Namespace) -> int:
             warnings=dataset.warnings,
             event_sink=sink,
         )
-        session.start()
-        while session.status is PaperSessionStatus.RUNNING:
-            session.step()
-            if (
-                args.pause_after_bars is not None
-                and session.status is PaperSessionStatus.RUNNING
-                and session.bars_processed == args.pause_after_bars
-            ):
-                session.pause()
-                session.resume()
-            if (
-                args.kill_switch_after_bars is not None
-                and session.status is PaperSessionStatus.RUNNING
-                and session.bars_processed == args.kill_switch_after_bars
-            ):
+        try:
+            if args.kill_switch_after_bars == 0:
                 session.activate_kill_switch()
-            if session.status is PaperSessionStatus.RUNNING and replay.replay_speed_seconds > 0:
-                time.sleep(replay.replay_speed_seconds)
+            elif args.stop_after_bars == 0:
+                session.stop()
+            else:
+                session.start()
+                while session.status is PaperSessionStatus.RUNNING:
+                    session.step()
+                    if (
+                        args.pause_after_bars is not None
+                        and session.status is PaperSessionStatus.RUNNING
+                        and session.bars_processed == args.pause_after_bars
+                    ):
+                        session.pause()
+                        session.resume()
+                    if (
+                        args.kill_switch_after_bars is not None
+                        and session.status is PaperSessionStatus.RUNNING
+                        and session.bars_processed == args.kill_switch_after_bars
+                    ):
+                        session.activate_kill_switch()
+                    if (
+                        args.stop_after_bars is not None
+                        and session.status is PaperSessionStatus.RUNNING
+                        and session.bars_processed == args.stop_after_bars
+                    ):
+                        session.stop()
+                    if (
+                        session.status is PaperSessionStatus.RUNNING
+                        and replay.replay_speed_seconds > 0
+                    ):
+                        time.sleep(replay.replay_speed_seconds)
+        except Exception as exc:
+            failure = exc
         summary = session.summary()
     finally:
-        if sink is not None:
-            sink.close()
+        close_warning = sink.close() if sink is not None else None
+    if close_warning is not None:
+        summary = _append_summary_warning(summary, close_warning)
 
     print("Local historical paper replay")
     print("Mode: simulated only; no network, broker, exchange, or real orders.")
@@ -275,12 +355,54 @@ def _paper_replay(args: argparse.Namespace) -> int:
     print(f"Status: {summary.status.value}")
     print(f"Bars processed: {summary.bars_processed}/{summary.total_bars}")
     print(f"Session ID: {summary.session_id}")
-    print(f"Ending equity: {summary.result.summary.ending_equity:.2f}")
-    print(f"Risk halt triggered: {summary.result.summary.risk_halt_triggered}")
+    if summary.result is not None:
+        print(f"Ending equity: {summary.result.summary.ending_equity:.2f}")
+        print(f"Risk halt triggered: {summary.result.summary.risk_halt_triggered}")
+    else:
+        print("Ending equity: not available (no bars processed)")
+        print(f"Risk halt triggered: {bool(summary.halt_reasons)}")
+    _print_warnings(summary.warnings)
     if data_path.resolve() == default_path.resolve():
         print("Data note: synthetic demo data only; no performance claim.")
+    artifact_paths = _artifact_path_mapping(
+        args,
+        include_result_exports=summary.result is not None,
+    )
+    if summary.result is not None:
+        if args.export_equity_csv:
+            print(
+                "Wrote paper equity CSV:",
+                export_equity_csv(summary.result, args.export_equity_csv),
+            )
+        if args.export_trades_csv:
+            print(
+                "Wrote paper trades CSV:",
+                export_trades_csv(summary.result, args.export_trades_csv),
+            )
+        if args.export_rejections_csv:
+            print(
+                "Wrote paper rejected intents CSV:",
+                export_rejected_intents_csv(summary.result, args.export_rejections_csv),
+            )
+        if args.export_risk_events_csv:
+            print(
+                "Wrote paper risk events CSV:",
+                export_risk_events_csv(summary.result, args.export_risk_events_csv),
+            )
     if args.export_json:
-        print("Wrote paper session JSON:", export_paper_session_json(summary, args.export_json))
+        print(
+            "Wrote paper session manifest:",
+            export_paper_session_json(
+                summary,
+                args.export_json,
+                artifact_paths=artifact_paths,
+            ),
+        )
+    if artifact_paths:
+        print("Artifact note: generated reports and logs are local and ignored by Git.")
+    if failure is not None:
+        print(f"Error: historical replay failed with {type(failure).__name__}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -297,6 +419,30 @@ def _show_config() -> int:
     }
     print(json.dumps(payload, indent=2, sort_keys=True, default=_json_default))
     return 0
+
+
+def _append_result_warning(result: BacktestResult, warning: DataWarning) -> BacktestResult:
+    if any(existing.code is warning.code for existing in result.warnings):
+        return result
+    selected = (*result.warnings, warning)
+    return replace(
+        result,
+        warnings=selected,
+        summary=replace(result.summary, warning_count=len(selected)),
+    )
+
+
+def _append_summary_warning(
+    summary: PaperSessionSummary,
+    warning: DataWarning,
+) -> PaperSessionSummary:
+    if any(existing.code is warning.code for existing in summary.warnings):
+        return summary
+    selected = (*summary.warnings, warning)
+    result = summary.result
+    if result is not None:
+        result = _append_result_warning(result, warning)
+    return replace(summary, warnings=selected, result=result)
 
 
 def _data_config(args: argparse.Namespace) -> CsvDataConfig:
@@ -324,6 +470,7 @@ def _backtest_config(args: argparse.Namespace) -> BacktestConfig:
         max_drawdown_pct=args.max_drawdown_limit_pct / 100,
         warmup_bars=args.warmup_bars,
         data_age_seconds=args.data_age_seconds,
+        strategy_history_limit=args.strategy_history_bars,
     )
 
 
@@ -342,7 +489,131 @@ def _risk_policy(symbol: str, config: BacktestConfig) -> RiskPolicy:
 def _data_path(selected: Path | None) -> tuple[Path, Path]:
     root = Path(__file__).resolve().parents[2]
     default = root / "data" / "sample" / "synthetic_spy_daily.csv"
-    return (selected or default), default
+    data_path = selected or default
+    _validate_data_path(data_path, root)
+    return data_path, default
+
+
+def _validate_data_path(path: Path, root: Path) -> None:
+    resolved = path.resolve()
+    if not _is_relative_to(resolved, root):
+        return
+    allowed_roots = tuple(
+        (root / "data" / directory).resolve()
+        for directory in ("sample", "local", "raw", "processed")
+    )
+    if not any(_is_relative_to(resolved, allowed) for allowed in allowed_roots):
+        raise ValueError(
+            "CSV paths inside the repository must be under data/sample, data/local, "
+            "data/raw, or data/processed"
+        )
+
+
+def _validate_selected_artifact_paths(
+    args: argparse.Namespace,
+    *,
+    data_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    report_root = (root / "reports").resolve()
+    log_root = (root / "logs").resolve()
+    selected_paths: list[tuple[str, Path]] = []
+    for name in (
+        "export_json",
+        "export_equity_csv",
+        "export_trades_csv",
+        "export_rejections_csv",
+        "export_risk_events_csv",
+    ):
+        selected = getattr(args, name, None)
+        if selected is not None:
+            _validate_artifact_path(selected, root=root, allowed_root=report_root)
+            selected_paths.append((name, selected.resolve()))
+    if getattr(args, "log_jsonl", None) is not None:
+        for index, log_path in enumerate(structured_log_artifact_paths(args.log_jsonl)):
+            _validate_artifact_path(log_path, root=root, allowed_root=log_root)
+            name = "log_jsonl" if index == 0 else f"log_jsonl_backup_{index}"
+            selected_paths.append((name, log_path.resolve()))
+
+    input_key = str(data_path.resolve()).casefold()
+    seen: dict[str, str] = {}
+    seen_paths: list[tuple[str, Path]] = []
+    for name, selected in selected_paths:
+        key = str(selected).casefold()
+        if key == input_key or _same_existing_file(selected, data_path):
+            raise ValueError(f"{name} must not overwrite or append to the input CSV")
+        previous = seen.get(key)
+        if previous is not None:
+            raise ValueError(f"{name} and {previous} must use different artifact paths")
+        for previous_name, previous_path in seen_paths:
+            if _same_existing_file(selected, previous_path):
+                raise ValueError(f"{name} and {previous_name} must use different artifact files")
+        seen[key] = name
+        seen_paths.append((name, selected))
+
+
+def _validate_artifact_path(path: Path, *, root: Path, allowed_root: Path) -> None:
+    resolved = path.resolve()
+    if (
+        _is_relative_to(resolved, root)
+        and not _is_relative_to(resolved, allowed_root)
+        and not _is_workspace_pytest_temp(resolved, root)
+    ):
+        raise ValueError(
+            f"generated artifacts inside the repository must be under {allowed_root.name}/"
+        )
+
+
+def _artifact_path_mapping(
+    args: argparse.Namespace,
+    *,
+    include_result_exports: bool,
+) -> dict[str, Path]:
+    selected: dict[str, Path] = {}
+    for label, name in (
+        ("manifest", "export_json"),
+        ("equity_csv", "export_equity_csv"),
+        ("trades_csv", "export_trades_csv"),
+        ("rejections_csv", "export_rejections_csv"),
+        ("risk_events_csv", "export_risk_events_csv"),
+        ("event_log", "log_jsonl"),
+    ):
+        value = getattr(args, name, None)
+        is_result_export = label in {
+            "equity_csv",
+            "trades_csv",
+            "rejections_csv",
+            "risk_events_csv",
+        }
+        if value is not None and (include_result_exports or not is_result_export):
+            selected[label] = value
+    return selected
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def _same_existing_file(first: Path, second: Path) -> bool:
+    try:
+        return first.samefile(second)
+    except OSError:
+        return False
+
+
+def _is_workspace_pytest_temp(path: Path, root: Path) -> bool:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return False
+    if not relative.parts:
+        return False
+    first = relative.parts[0]
+    return first == ".pytest" or first.startswith((".pytest-", ".pytest_"))
 
 
 def _print_resolved_config(
@@ -386,13 +657,19 @@ def _print_backtest_summary(result, data_path: Path, default_path: Path) -> None
     print(f"Maximum exposure: {summary.max_exposure:.4%}")
     print(f"Risk halt triggered: {summary.risk_halt_triggered}")
     print(f"Rejected intents: {summary.rejected_order_count}")
-    print(f"Warnings: {summary.warning_count}")
+    _print_warnings(result.warnings)
     print(
         f"Buy-and-hold benchmark: {result.benchmarks.buy_and_hold.ending_equity:.2f} ending equity"
     )
     print(f"Cash benchmark: {result.benchmarks.cash.ending_equity:.2f} ending equity")
     if data_path.resolve() == default_path.resolve():
         print("Data note: synthetic demo data only; results are not meaningful market evidence.")
+
+
+def _print_warnings(warnings: tuple[DataWarning, ...]) -> None:
+    print(f"Warnings: {len(warnings)}")
+    for warning in warnings:
+        print(f"Warning [{warning.code.value}]: {warning.message}")
 
 
 def _json_default(value: object) -> object:

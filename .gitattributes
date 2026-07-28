@@ -1,0 +1,4 @@
+# The parity identity includes exact fixture bytes; keep it stable across Windows and CI.
+tests/fixtures/parity/v1/*.csv text eol=lf
+tests/fixtures/parity/v1/*.json text eol=lf
+contracts/parity/v1/*.json text eol=lf

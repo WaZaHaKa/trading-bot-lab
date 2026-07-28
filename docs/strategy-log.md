@@ -243,3 +243,162 @@ candidate and not a live-trading candidate.
 
 Next safe milestone: broader offline historical-data testing. Do not infer a
 strategy edge from the synthetic fixture.
+
+## 2026-07-18 - Sprint 1 execution and risk hardening
+
+### Hypothesis
+
+No market or profitability hypothesis was tested. This sprint hardened the
+research harness against timing ambiguity, accounting drift, malformed local
+CSV data, and caller-controlled risk projections.
+
+### Asset universe and data
+
+Single-symbol synthetic SPY-shaped fixtures only. The committed sample is
+synthetic/demo data; no real market data, network call, download, credential,
+or paid service was introduced.
+
+### Signal and execution
+
+Strategies still receive only a trailing immutable historical prefix. A signal
+from completed bar T can execute no earlier than the next input bar's open.
+Same-bar close execution and close fallback are prohibited, every simulation
+bar requires a valid open, and a final-bar target expires without a fill.
+
+### Risk and accounting
+
+Order projections are cross-checked against quantity, cash, exposure, and
+post-cost equity. Risk-reducing status is derived rather than trusted. Daily
+loss accumulates across bars sharing a UTC date, opening peaks persist for
+drawdown, and portfolio checks run immediately after fills. Risk errors fail
+closed. Live trading, leverage, margin, and shorting remain unavailable.
+
+### Validation
+
+Deterministic synthetic tests cover fee/slippage hand calculations, post-cost
+exposure, intraday daily loss, UTC rollover, opening-peak drawdown, final-bar
+expiry, risk exceptions, malformed projections, and attempted strategy state
+mutation in addition to the existing regression suite.
+
+### Decision
+
+Research-only backtesting and local historical replay. These results are
+hypothetical, are not financial advice, and make no profitability claim. Live
+trading is not implemented, and this is not a broker-paper candidate.
+
+### Notes
+
+Python floats remain in use with explicit rounding. A reviewed Decimal or
+fixed-point migration remains future work before multi-currency settlement or
+reconciliation. LEAN stays preserved and paused.
+
+## 2026-07-18 - Sprint 2 reporting and historical replay hardening
+
+### Hypothesis
+
+No market or profitability hypothesis was tested. This sprint validates
+reproducibility, benchmark methodology, durable local artifacts, and replay
+lifecycle behavior only.
+
+### Asset universe and data
+
+Single-symbol synthetic SPY-shaped fixtures remain the only committed market
+data. CSV provenance now hashes the exact bytes parsed and exposes only a safe
+filename. In-memory tests use canonical content hashes. No download, network
+client, credential, vendor, or paid service was introduced.
+
+### Signal and execution
+
+Batch and historical replay still share next-bar-open execution and one
+accounting engine. Strategy input is an immutable bounded visible history. Pause,
+resume, stop, kill, completion, and failure use a typed lifecycle. Terminal
+controls expire pending signals; no final fill or automatic liquidation is
+invented.
+
+### Benchmarks, reports, and logging
+
+Cash remains a zero-cost control. Buy-and-hold applies configured warm-up,
+slippage, fee/minimum fee, and quantity precision; keeps nonnegative residual
+cash; marks closes; and discloses its open final position. JSON/CSV schema 1.2
+adds path-safe content provenance, complete benchmark metrics, trade-state audit
+fields, risk events, and atomic replacement. Paper manifests record versions,
+seed, event range, terminal reason, and artifact basenames. Structured event
+schema 1.0 records selected lifecycle and financial fields locally.
+
+### Validation
+
+Deterministic/adversarial tests cover content-changing session IDs, file-rename
+stability, costed benchmark arithmetic, warm-up, open positions, atomic replace
+failure, byte-stable controlled exports, zero-bar stop/kill/failure summaries,
+idempotent controls, bounded history, replay-speed invariance, event taxonomy,
+manifest safety, CLI artifact roots, and spreadsheet-safe symbols. Ubuntu and
+Windows CI run Ruff, pytest, and preflight.
+
+### Decision
+
+Research-only backtesting and local historical replay remain active. This is not
+a broker-paper or live-trading candidate. Results are hypothetical, no strategy
+edge is claimed, and nothing here is financial advice.
+
+### Notes
+
+Stop after local historical replay. Process restart/checkpoint recovery,
+multi-asset support, databases, optimization, ML/AI/RL, brokers, exchanges, and
+live trading remain out of scope. LEAN remains preserved and paused.
+
+## 2026-07-28 - LEAN activation and parity sprint
+
+### Hypothesis
+
+No profitability hypothesis is being tested. This sprint verifies LEAN cloud
+wiring, long-only risk controls, completed-bar/next-open timing, and an
+independent synthetic parity contract.
+
+### Asset universe and data
+
+The required cloud projects use daily SPY data available to the QuantConnect
+research organization. The parity contract uses only a committed synthetic
+fixture. No local market data was downloaded or purchased.
+
+### Signal and execution
+
+`SkeletonBacktest` is a no-order engine smoke test. `MovingAverageBaseline`
+uses validated trailing fast/slow windows, emits only long/flat targets after
+readiness, and routes risk-adjusted targets through a controlled market-on-open
+execution component. No final-bar fill is fabricated.
+
+### Risk and costs
+
+Cash account, one-times leverage, 10% per-symbol and 30% total exposure caps,
+2% completed-daily loss and 5% peak-drawdown halts, explicit fee/slippage
+models, and an initialization-time live-mode rejection remain mandatory.
+
+### Validation status
+
+- Repository and migration audit completed.
+- LEAN CLI 1.0.227 located in the repository virtual environment.
+- `lean whoami` returned `You are not logged in`; no identity or token was printed.
+- Cloud project identifiers/results: pending interactive authentication and
+  successful scoped cloud runs. Do not interpret this entry as a completed
+  LEAN backtest.
+- Native verification after the final review: 246 pytest tests passed; Ruff
+  lint and format checks passed; repository preflight passed; `git diff
+  --check` returned success with Windows line-ending conversion warnings.
+- The local v1 oracle trace processed 8 synthetic weekday bars and recorded one
+  buy plus one sell, positive explicit fees/slippage, no risk rejection, and no
+  final-bar intent/fill. Its comparator fixture is explicitly not a LEAN
+  observation, so cross-engine parity remains unproven.
+- Docker Desktop's Linux engine was not available. The offline converter for
+  ignored LEAN-format synthetic data is unit-tested, but no local LEAN fixture
+  run or normalized LEAN trace was produced.
+
+### Decision
+
+LEAN is active by architecture policy for cloud research/backtesting; live
+trading remains prohibited. The old `lean/` tree remains preserved and is not
+yet marked superseded.
+
+### Notes
+
+The next safe milestone is walk-forward validation using LEAN cloud backtests
+and local parity checks. No optimization or live-trading milestone is approved.

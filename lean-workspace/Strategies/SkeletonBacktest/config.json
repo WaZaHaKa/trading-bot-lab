@@ -1,0 +1,11 @@
+{
+  "algorithm-language": "Python",
+  "parameters": {
+    "start-date": "2023-01-01",
+    "end-date": "2023-03-31",
+    "initial-cash": "100000",
+    "maximum-allocation": "0.05"
+  },
+  "description": "Backtest-only SPY daily no-order cloud subscription smoke test; live mode forbidden."
+}
+

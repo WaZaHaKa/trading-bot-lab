@@ -1,4 +1,4 @@
-.PHONY: test lint format format-check preflight validate-csv local-backtest paper-replay check tree
+.PHONY: test lint format format-check preflight lean-static validate-csv local-backtest paper-replay check tree
 
 test:
 	python -m pytest
@@ -14,6 +14,9 @@ format-check:
 
 preflight:
 	python scripts/preflight_check.py
+
+lean-static:
+	python -m pytest tests/test_repository_hygiene.py tests/test_lean_projects.py tests/test_lean_parity_data.py
 
 validate-csv:
 	python -m trading_bot_lab validate-csv

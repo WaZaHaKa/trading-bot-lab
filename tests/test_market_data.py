@@ -71,6 +71,72 @@ def test_required_columns_fail_closed(tmp_path: Path, header: str, message: str)
         load_market_data_csv(write_csv(tmp_path, header))
 
 
+def test_duplicate_or_whitespace_column_names_are_rejected(tmp_path: Path) -> None:
+    duplicate = write_csv(
+        tmp_path,
+        "date,symbol,close,close\n2024-01-01,SPY,100,100\n",
+        "duplicate.csv",
+    )
+    whitespace = write_csv(
+        tmp_path,
+        "date,symbol, close\n2024-01-01,SPY,100\n",
+        "whitespace.csv",
+    )
+
+    with pytest.raises(DataValidationError, match="duplicated CSV columns"):
+        load_market_data_csv(duplicate)
+    with pytest.raises(DataValidationError, match="must not contain whitespace"):
+        load_market_data_csv(whitespace)
+
+
+def test_extra_row_values_are_rejected(tmp_path: Path) -> None:
+    path = write_csv(
+        tmp_path,
+        "date,symbol,close\n2024-01-01,SPY,100,unexpected\n",
+    )
+
+    with pytest.raises(DataValidationError, match="extra values beyond the CSV header"):
+        load_market_data_csv(path)
+
+
+@pytest.mark.parametrize("column", ["open", "high", "low"])
+def test_declared_ohlc_columns_cannot_be_blank(tmp_path: Path, column: str) -> None:
+    values = {"open": "100", "high": "101", "low": "99"}
+    values[column] = ""
+    path = write_csv(
+        tmp_path,
+        "date,symbol,open,high,low,close\n"
+        f"2024-01-01,SPY,{values['open']},{values['high']},{values['low']},100\n",
+    )
+
+    with pytest.raises(DataValidationError, match=f"empty {column}"):
+        load_market_data_csv(path)
+
+
+def test_high_and_low_must_be_declared_together(tmp_path: Path) -> None:
+    path = write_csv(
+        tmp_path,
+        "date,symbol,open,high,close\n2024-01-01,SPY,100,101,100\n",
+    )
+
+    with pytest.raises(DataValidationError, match="both high and low"):
+        load_market_data_csv(path)
+
+
+def test_string_policy_values_are_normalized_or_rejected() -> None:
+    normalized = CsvDataConfig(
+        missing_volume_policy="warn",  # type: ignore[arg-type]
+        gap_policy="reject",  # type: ignore[arg-type]
+    )
+
+    assert normalized.missing_volume_policy is MissingVolumePolicy.WARN
+    assert normalized.gap_policy is GapPolicy.REJECT
+    with pytest.raises(ValueError, match="supported policy values"):
+        CsvDataConfig(missing_volume_policy="skip")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="positive integer"):
+        CsvDataConfig(timeframe_seconds=True)
+
+
 def test_duplicate_timestamp_is_rejected(tmp_path: Path) -> None:
     path = write_csv(
         tmp_path,

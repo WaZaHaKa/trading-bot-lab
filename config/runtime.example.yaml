@@ -1,14 +1,16 @@
 # Example runtime configuration.
-# The active mode remains backtest unless historical paper replay is selected.
+# LEAN cloud is the primary research engine; local Python remains the parity oracle.
 
 environment: local
 trading_mode: backtest
-engine: local_python
+primary_engine: lean_cloud
+parity_oracle: local_python
 log_level: INFO
 
 paths:
   data_dir: ./data
-  lean_data_dir: ./lean/data
+  lean_workspace_dir: ./lean-workspace
+  lean_data_dir: ./lean-workspace/data
   reports_dir: ./reports
   logs_dir: ./logs
   models_dir: ./models
@@ -16,5 +18,7 @@ paths:
 features:
   ml_enabled: false
   historical_paper_replay_enabled: false
+  automatic_data_download_enabled: false
+  optimization_enabled: false
   live_trading_enabled: false
   monitoring_enabled: false

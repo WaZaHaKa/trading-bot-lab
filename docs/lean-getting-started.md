@@ -1,13 +1,12 @@
 # LEAN getting started
 
-## Paused status
+## Active status
 
-LEAN CLI work is paused because the attempted local workflow requires a paid
-QuantConnect organization and the owner does not want to spend money right now.
-Preserve the `lean/` folders for later, but use `docs/local-backtesting.md` for
-the active free MVP.
+**LEAN active for cloud research/backtesting; live trading remains prohibited.**
 
-This guide keeps LEAN usage local and backtest-only for Milestone 1.
+The organization workspace is `../lean-workspace/`. The old `../lean/` tree is
+preserved until migration verification. The local Python workflow remains an
+independent oracle; see `local-backtesting.md`.
 
 Do not add live brokerage credentials, exchange credentials, QuantConnect API
 tokens, or paid data-vendor secrets to this repository.
@@ -53,45 +52,53 @@ If `make` is available, the equivalent project checks are:
 make check
 ```
 
-## Install LEAN CLI locally
+## LEAN CLI
 
-Install the LEAN CLI into the activated virtual environment:
+The repository virtual environment is the preferred execution context:
 
 ```bash
 python -m pip install lean
-lean --version
+.\.venv\Scripts\lean.exe --version
 ```
 
-Keep any LEAN CLI user configuration local. If `lean init` creates local config
-or data folders, confirm they are ignored before committing.
+Keep global credentials in the user profile. Never copy `.lean/credentials`
+into the repository. See `windows-lean-setup.md` for interactive login and the
+reviewed one-time workspace bootstrap.
 
-## Run local backtests
+## Run cloud backtests
 
-Start with the no-trade skeleton:
+Run only after authentication, workspace validation, and repository preflight:
 
 ```bash
-lean backtest "lean/algorithms/SkeletonBacktest"
+Push-Location .\lean-workspace
+& $LeanExe cloud push --project ".\Strategies\SkeletonBacktest"
+& $LeanExe cloud backtest "Strategies/SkeletonBacktest" --push
 ```
 
-Then run the experimental moving-average baseline:
+Then run the long-only baseline:
 
 ```bash
-lean backtest "lean/algorithms/MovingAverageBaseline"
+& $LeanExe cloud push --project ".\Strategies\MovingAverageBaseline"
+& $LeanExe cloud backtest "Strategies/MovingAverageBaseline" --push
+Pop-Location
 ```
 
 Expected behavior:
 
 - `SkeletonBacktest` submits no orders.
-- `MovingAverageBaseline` is SPY-only, long-only, and caps target exposure at 10%.
+- The reviewed `MovingAverageBaseline` cloud configuration is SPY, long-only,
+  and caps target exposure at 10%; only the documented offline synthetic parity
+  run may override the symbol to `PARITY`.
 - Neither algorithm contains live-trading setup or brokerage credentials.
 
-LEAN may require local market data before these backtests complete. Store local
-data under `lean/data/`; it is ignored by Git. Do not commit downloaded data,
-backtest result files, logs, or generated reports.
+Cloud runs use data available to the organization. Do not run `lean data
+download`, `lean backtest --download-data`, optimization, or a local
+QuantConnect historical data provider. Local LEAN execution is optional and may
+use only already-present or synthetic data under ignored workspace paths.
 
 ## Recording results
 
-For Milestone 1, record only brief notes in `docs/strategy-log.md`:
+Record only brief non-promotional notes in `docs/strategy-log.md`:
 
 - command run,
 - date range,
@@ -101,3 +108,5 @@ For Milestone 1, record only brief notes in `docs/strategy-log.md`:
 
 Do not commit LEAN result dumps from `lean/results/` or any report containing
 account details.
+
+See `lean-integration.md` and `qcc-guardrails.md` for the complete workflow.

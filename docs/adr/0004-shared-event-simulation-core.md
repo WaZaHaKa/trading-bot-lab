@@ -35,7 +35,7 @@ Positive:
 
 Tradeoffs:
 
-- Next-open execution requires open prices for actionable bars.
+- Next-open execution requires a valid open on every simulation bar.
 - A single-symbol float-based simulator remains less realistic than a mature engine.
 - Adding multi-asset state requires a new reviewed portfolio model rather than
   extending single-symbol fields ad hoc.
@@ -44,5 +44,7 @@ Tradeoffs:
 
 - Continue close-only fills: timing was under-specified and easier to misuse.
 - Build an independent paper engine: duplicated semantics would create reconciliation risk.
-- Reactivate LEAN now: conflicts with the current no-cost MVP constraint.
+- Reactivate LEAN at that time: conflicted with the then-current no-cost MVP
+  constraint. ADR 0007 later activates LEAN cloud while retaining this core as
+  an independent oracle.
 - Add pandas/backtesting frameworks: unnecessary for the small event/domain core.

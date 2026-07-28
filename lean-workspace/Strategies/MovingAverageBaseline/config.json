@@ -1,0 +1,21 @@
+{
+  "algorithm-language": "Python",
+  "parameters": {
+    "symbol": "SPY",
+    "start-date": "2020-01-01",
+    "end-date": "2021-01-01",
+    "initial-cash": "100000",
+    "fast-period": "20",
+    "slow-period": "50",
+    "warmup-bars": "50",
+    "target-weight": "0.10",
+    "max-position-weight": "0.10",
+    "max-total-exposure": "0.30",
+    "fee-bps": "1.0",
+    "minimum-fee": "1.0",
+    "slippage-bps": "2.0",
+    "max-daily-loss": "0.02",
+    "max-drawdown": "0.05"
+  },
+  "description": "Backtest-only long-only SPY daily 20/50 moving-average parity baseline with next-open execution; live mode forbidden."
+}

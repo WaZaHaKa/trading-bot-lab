@@ -59,6 +59,7 @@ REQUIRED_FILES = [
     "contracts/lean-cloud-validation/v1/2026-07-28.json",
     "contracts/lean-cloud-validation/v1/record.schema.json",
     "contracts/lean-local-parity/v1/2026-07-28.json",
+    "contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json",
     "contracts/lean-local-parity/v1/record.schema.json",
     "tests/test_lean_local_parity_evidence.py",
     "src/trading_bot_lab/parity/__init__.py",

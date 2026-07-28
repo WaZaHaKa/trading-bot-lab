@@ -437,6 +437,7 @@ def test_preflight_rejects_force_tracked_operator_linkage_file() -> None:
         "contracts/lean-cloud-validation/v1/2026-07-28.json",
         "contracts/lean-cloud-validation/v1/record.schema.json",
         "contracts/lean-local-parity/v1/2026-07-28.json",
+        "contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json",
         "contracts/lean-local-parity/v1/record.schema.json",
         "lean-workspace/Strategies/ParityFixtureV1/main.py",
         "lean-workspace/Strategies/ParityFixtureV1/config.json",

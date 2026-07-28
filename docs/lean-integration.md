@@ -1,8 +1,8 @@
 # LEAN integration guide
 
 Status: **LEAN cloud engine validation completed for both SPY research projects;
-the pinned local identical-data run completed, but overall parity failed on the
-exit risk-metric snapshot; live trading remains prohibited.**
+the corrected pinned local identical-data rerun passed all sixteen dimensions;
+live trading remains prohibited.**
 
 LEAN is the primary cross-asset research engine. The local Python CSV engine
 remains an independent deterministic oracle and must not be deleted or changed
@@ -32,6 +32,12 @@ lean-workspace/
 contracts/lean-cloud-validation/v1/
   record.schema.json                closed public record schema
   2026-07-28.json                   sanitized canonical observations
+
+contracts/lean-local-parity/v1/
+  record.schema.json                closed backward-compatible v1 schema
+  2026-07-28.json                   immutable historical failed record
+  2026-07-28-open-phase-rerun-1.json
+                                    sanitized successful rerun record
 
 lean/                               preserved pre-activation files
 ```
@@ -256,19 +262,22 @@ both transport parameters. Repository tooling performs no Object Store write.
 Never use `lean data download`, `--download-data`, a historical data provider,
 optimization, remote URL, or network fallback.
 
-The genuine local run used LEAN `2.5.0.0`, the pinned immutable image, the exact
-local fixture, and the rootless network-isolated runtime. Fifteen of sixteen
-dimensions passed. Execution timing is `passed`; numerical accounting/risk and
-overall parity are `failed` because three exit-decision risk ratios used a
-current-row-close LEAN portfolio snapshot rather than the eligible open snapshot.
-The closed sanitized record is
-`contracts/lean-local-parity/v1/2026-07-28.json`; it remains immutable historical
-evidence. The adapter now values the pre-fill risk snapshot from timestamp-bound
-cash, quantity, and execution-open state instead of LEAN's cached aggregate
-portfolio value. Focused offline regressions pass without changing expected
-values or tolerances, but this is not new engine evidence. The first additional
-genuine run remains gated on complete local validation and passing Ubuntu and
-Windows CI. No Object Store or cloud parity operation occurred.
+The initial genuine local run used LEAN `2.5.0.0`, the pinned immutable image,
+the exact local fixture, and the rootless network-isolated runtime. Fifteen of
+sixteen dimensions passed; three exit-decision ratios exposed cached close-mark
+contamination. Its failed record remains unchanged at
+`contracts/lean-local-parity/v1/2026-07-28.json`.
+
+The adapter now values the pre-fill risk snapshot from timestamp-bound cash,
+quantity, and execution-open state. After the correction passed the full local
+gate and Ubuntu/Windows CI, authorization batch
+`open-phase-risk-correction-1` consumed one additional genuine execution. At a
+cumulative count of six, all sixteen dimensions matched with unchanged
+tolerances. The separate sanitized record is
+`contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json`. The second
+authorized execution was not used, and no image pull, Object Store operation, or
+cloud parity command occurred. This is exact-fixture engine-validation evidence,
+not a profitability, strategy-quality, or deployment claim.
 
 See `windows-lean-setup.md`, `qcc-guardrails.md`,
 `execution-timing-comparison.md`, `risk-policy-mapping.md`, and

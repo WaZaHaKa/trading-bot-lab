@@ -637,3 +637,53 @@ dimensions.
 No LEAN execution, image pull, cloud command, Object Store operation, external
 market-data request, broker connection, optimization, or live deployment
 occurred while implementing this correction.
+
+## 2026-07-28 - Corrected genuine local LEAN parity rerun
+
+### Gate
+
+Correction commit `a675e559e4660809b3bec5f3415935504f8c01c1` passed
+the full local gate with 485 tests and passed Ubuntu and Windows CI run
+`30385637164`. The user-owned rootless daemon, cached immutable OCI index,
+`linux/amd64` platform manifest, exact LF fixture, deterministic local trace,
+and permanent five-execution/one-pull history were revalidated before execution.
+
+### Execution
+
+Authorization batch `open-phase-risk-correction-1` permitted at most two
+additional genuine executions and no pull. One execution was used, advancing
+the permanent cumulative count from five to six. The second execution was not
+used.
+
+### Result
+
+The genuine LEAN `2.5.0.0` observation matched the independent local oracle
+across all sixteen dimensions: fixture identity, bar visibility, signal timing,
+intent timing, fill timing, direction/count, position, fees, slippage, cash,
+realized/unrealized PnL, equity, exposure, drawdown, final-bar behavior, and
+rejection/halt state. The corrected `daily_loss_pct`, `drawdown_pct`, and
+`order_weight` differences were all below the unchanged `0.0000001` ratio
+tolerance.
+
+### Evidence
+
+The original failed record remains byte-for-byte unchanged with SHA-256
+`5832d6948bec3e4e672227200bf9e03484e5515afa2c3a14e07682e3200cf6f5`.
+The successful rerun is recorded separately at
+`contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json`, including
+the predecessor digest, authorization counts, correction commit, immutable
+runtime identities, content hashes, unchanged tolerances, and every dimension.
+
+### Decision
+
+`genuine_local_lean_parity_passed` for the exact v1 synthetic fixture. The pull
+request may proceed to human review but must not be merged automatically. This
+result is research-infrastructure validation, not a profitability,
+strategy-quality, paper-trading, or live-trading approval.
+
+### Notes
+
+No image pull, cloud command, Object Store operation, external market-data
+request, broker/exchange connection, optimization, system-Docker access, or live
+deployment occurred. Raw logs, traces, runtime output, and machine metadata
+remain ignored and untracked.

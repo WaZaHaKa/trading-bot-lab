@@ -31,16 +31,18 @@
   network-isolated LEAN `2.5.0.0` run. The explicit Object Store transport remains
   unexecuted; no Object Store upload, download, or read was attempted.
 - A real ignored `TRADING_BOT_LAB_LEAN_PARITY_V1:` message and validated
-  `lean_engine_observation` now exist. The tracked record contains only sanitized
-  classifications and non-reversible digests, not the raw message or trace.
-- The final comparison passed 15 of 16 dimensions. LEAN valued the exit-decision
-  risk snapshot at the current row close rather than the next-bar open used by
-  the local oracle, so three risk ratios exceeded tolerance even though both
-  engines approved the risk-reducing exit.
-- The adapter now constructs the open-phase risk snapshot explicitly, and
-  offline regressions reproduce and eliminate the close-mark mismatch. No
-  corrected genuine LEAN observation exists yet, so the historical failed
-  classification remains authoritative.
+  `lean_engine_observation` now exist. The tracked records contain only sanitized
+  classifications and non-reversible digests, not raw messages or traces.
+- The first genuine comparison passed 15 of 16 dimensions. LEAN valued the
+  exit-decision risk snapshot at the current row close rather than the next-bar
+  open used by the local oracle, so three risk ratios exceeded tolerance even
+  though both engines approved the risk-reducing exit. That failed record remains
+  immutable historical evidence.
+- The adapter now constructs the open-phase risk snapshot explicitly. One
+  separately authorized genuine rerun passed all 16 dimensions, including the
+  three corrected ratios within the unchanged tolerance. This validates only
+  the exact eight-row synthetic fixture; it does not establish parity for other
+  datasets, algorithms, asset types, or runtime versions.
 - Observation extraction validates canonical structure, content binding, and
   the claimed engine/provenance state; it is not cryptographic runtime
   attestation. The operator must preserve and review the actual ignored LEAN
@@ -65,9 +67,8 @@
 Cloud and local backtests are hypothetical, place no real orders, are not
 financial advice, and do not predict future results.
 
-The next safe milestone is complete local validation, passing Ubuntu and Windows
-CI for the correction commit, and then one authorized genuine comparison. The
-five prior executions remain permanent history; batch
-`open-phase-risk-correction-1` permits at most two additional executions and a
-maximum cumulative count of seven, with no image pull. Any walk-forward work
-remains subsequent and separately reviewed.
+The corrected rerun consumed one additional execution, leaving the permanent
+cumulative count at six; the authorized second execution was not used, and no
+image pull occurred. The next safe milestone is human review of the ready pull
+request. Object Store/cloud identical-data parity, other fixtures, walk-forward
+testing, and any deployment remain separate, explicitly reviewed work.

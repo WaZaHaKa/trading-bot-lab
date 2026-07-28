@@ -15,6 +15,10 @@
       ],
       "type": "string"
     },
+    "gitCommit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
     "sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "type": "string"
@@ -23,6 +27,217 @@
   "$id": "urn:trading-bot-lab:lean-local-parity-validation:v1:record",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "not": {
+          "required": [
+            "rerun"
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "classifications": {
+            "properties": {
+              "numerical_accounting_parity": {
+                "const": "failed"
+              },
+              "overall_status": {
+                "const": "genuine_local_lean_parity_failed"
+              }
+            }
+          },
+          "comparison": {
+            "properties": {
+              "divergences": {
+                "minItems": 1
+              },
+              "matched": {
+                "const": false
+              }
+            }
+          },
+          "runtime": {
+            "properties": {
+              "execution_count": {
+                "maximum": 5
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "rerun"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "execution_count": {
+                "maximum": 7,
+                "minimum": 6
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "classifications": {
+            "properties": {
+              "numerical_accounting_parity": {
+                "const": "failed"
+              },
+              "overall_status": {
+                "const": "genuine_local_lean_parity_failed"
+              }
+            }
+          },
+          "comparison": {
+            "properties": {
+              "dimensions": {
+                "not": {
+                  "additionalProperties": {
+                    "const": "passed"
+                  }
+                }
+              },
+              "divergences": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "comparison": {
+            "properties": {
+              "matched": {
+                "const": true
+              }
+            },
+            "required": [
+              "matched"
+            ]
+          }
+        },
+        "required": [
+          "comparison"
+        ]
+      },
+      "then": {
+        "properties": {
+          "classifications": {
+            "properties": {
+              "execution_timing_parity": {
+                "const": "passed"
+              },
+              "numerical_accounting_parity": {
+                "const": "passed"
+              },
+              "overall_status": {
+                "const": "genuine_local_lean_parity_passed"
+              }
+            }
+          },
+          "comparison": {
+            "properties": {
+              "dimensions": {
+                "additionalProperties": {
+                  "const": "passed"
+                }
+              },
+              "divergences": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rerun": {
+            "properties": {
+              "batch_execution_count": {
+                "const": 1
+              }
+            },
+            "required": [
+              "batch_execution_count"
+            ]
+          }
+        },
+        "required": [
+          "rerun"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rerun": {
+            "properties": {
+              "cumulative_execution_count": {
+                "const": 6
+              }
+            }
+          },
+          "runtime": {
+            "properties": {
+              "execution_count": {
+                "const": 6
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rerun": {
+            "properties": {
+              "batch_execution_count": {
+                "const": 2
+              }
+            },
+            "required": [
+              "batch_execution_count"
+            ]
+          }
+        },
+        "required": [
+          "rerun"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rerun": {
+            "properties": {
+              "cumulative_execution_count": {
+                "const": 7
+              }
+            }
+          },
+          "runtime": {
+            "properties": {
+              "execution_count": {
+                "const": 7
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "classifications": {
       "additionalProperties": false,
@@ -34,10 +249,16 @@
           ]
         },
         "numerical_accounting_parity": {
-          "const": "failed"
+          "enum": [
+            "passed",
+            "failed"
+          ]
         },
         "overall_status": {
-          "const": "genuine_local_lean_parity_failed"
+          "enum": [
+            "genuine_local_lean_parity_passed",
+            "genuine_local_lean_parity_failed"
+          ]
         }
       },
       "required": [
@@ -196,7 +417,6 @@
             ],
             "type": "object"
           },
-          "minItems": 1,
           "type": "array"
         },
         "fills_compared": {
@@ -206,7 +426,7 @@
           "const": 2
         },
         "matched": {
-          "const": false
+          "type": "boolean"
         },
         "risk_decisions_compared": {
           "const": 2
@@ -306,6 +526,56 @@
     "record_type": {
       "const": "lean_local_parity_validation"
     },
+    "rerun": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_batch_id": {
+          "const": "open-phase-risk-correction-1"
+        },
+        "batch_execution_count": {
+          "maximum": 2,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "correction_category": {
+          "const": "execution_open_risk_snapshot_valuation"
+        },
+        "correction_commit_sha": {
+          "$ref": "#/$defs/gitCommit"
+        },
+        "correction_explanation": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "cumulative_execution_count": {
+          "maximum": 7,
+          "minimum": 6,
+          "type": "integer"
+        },
+        "maximum_additional_executions": {
+          "const": 2
+        },
+        "maximum_cumulative_executions": {
+          "const": 7
+        },
+        "predecessor_failed_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "authorization_batch_id",
+        "batch_execution_count",
+        "correction_category",
+        "correction_commit_sha",
+        "correction_explanation",
+        "cumulative_execution_count",
+        "maximum_additional_executions",
+        "maximum_cumulative_executions",
+        "predecessor_failed_record_sha256"
+      ],
+      "type": "object"
+    },
     "runtime": {
       "additionalProperties": false,
       "properties": {
@@ -313,7 +583,7 @@
           "const": "passed"
         },
         "execution_count": {
-          "maximum": 5,
+          "maximum": 7,
           "minimum": 1,
           "type": "integer"
         },

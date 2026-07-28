@@ -74,8 +74,15 @@ dimensions or permit a full parity claim.
 
 The adapter correction above is covered by offline unit and comparator
 regressions, including a test that recreates the historical close-mark failure.
-It is not new engine evidence. The original failed record remains authoritative
-until a separately gated genuine LEAN rerun compares all sixteen dimensions.
+After the correction passed Ubuntu and Windows CI, one genuine rerun used the
+same exact fixture and cached immutable runtime. All sixteen dimensions matched,
+including `rejection_and_halt_state`; the three corrected exit-ratio differences
+were below the unchanged ratio tolerance.
+
+The original failed record remains immutable historical evidence. The successful
+rerun is recorded separately in
+`contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json`. This result
+validates the documented timing contract for the exact v1 fixture only.
 
 ## Identical-fixture comparison rules
 

@@ -1,0 +1,91 @@
+{
+  "classifications": {
+    "execution_timing_parity": "passed",
+    "numerical_accounting_parity": "passed",
+    "overall_status": "genuine_local_lean_parity_passed"
+  },
+  "comparison": {
+    "bars_compared": 8,
+    "dimensions": {
+      "bar_visibility": "passed",
+      "cash": "passed",
+      "drawdown": "passed",
+      "equity": "passed",
+      "exposure": "passed",
+      "fees": "passed",
+      "fill_timing": "passed",
+      "final_bar_behavior": "passed",
+      "fixture_identity": "passed",
+      "intent_timing": "passed",
+      "position_state": "passed",
+      "realized_unrealized_pnl": "passed",
+      "rejection_and_halt_state": "passed",
+      "signal_timing": "passed",
+      "slippage": "passed",
+      "trade_direction_and_count": "passed"
+    },
+    "divergences": [],
+    "fills_compared": 2,
+    "intents_compared": 2,
+    "matched": true,
+    "risk_decisions_compared": 2,
+    "tolerances": {
+      "money": "0.01",
+      "price": "0.00000001",
+      "quantity": "0",
+      "ratio": "0.0000001"
+    }
+  },
+  "evidence_sha256": {
+    "algorithm_source_sha256": "9269c1b8d788b57ea82782aa1d03e4924d6bd79c502e7e3df79c37cfdefbb024",
+    "comparison_sha256": "fff00e90bd05b8a4c8dbfbe62f19d58e1ef3d81ef45f1a4601aad6cfcdbfdfb3",
+    "contract_sha256": "81d300e5567ab7f6c3f6b49058542ac229f4597efa248036fe5d2879fc1efe8d",
+    "fixture_sha256": "a68bcf7fc30d2593b32e5a98852c4f8e0190ed99865640485b344515d9f1f78a",
+    "image_record_sha256": "083b1b0cdf9cd84101ed81e0d167ed979535cf5f701c4d26c61f35c91577708d",
+    "lean_trace_sha256": "40631bb0c4ff02e44c43c5eb170cfc7ba6c91920e7d7c53f3ef7310ceb4a1808",
+    "local_trace_sha256": "5c0592f4cff93d6efd835d56ebf33211ce8950c8ecc17c780f107570d7a8bfe4",
+    "normalized_bars_sha256": "02394c31af7b982493bcbdadd92735d7a0ee6ae04e3d38b7e3e3a5fde6cbce6d",
+    "public_configuration_sha256": "e3430686f13145f992c34462f5d441256579250624bf39ed42b35b2057921137",
+    "runtime_audit_sha256": "96b30261e4a59b707d6d28999b7eb656944aacc513ac852a73226002db177e8c",
+    "scenario_manifest_sha256": "8179874de11817c421f7ddcfdb2f1f173308009953a576a954fd8e3f6b58bf4a"
+  },
+  "execution_date_utc": "2026-07-28",
+  "record_type": "lean_local_parity_validation",
+  "rerun": {
+    "authorization_batch_id": "open-phase-risk-correction-1",
+    "batch_execution_count": 1,
+    "correction_category": "execution_open_risk_snapshot_valuation",
+    "correction_commit_sha": "a675e559e4660809b3bec5f3415935504f8c01c1",
+    "correction_explanation": "The LEAN adapter now derives pre-fill risk telemetry from explicit cash, quantity, and the eligible execution-row open instead of an ambiguous cached aggregate portfolio valuation.",
+    "cumulative_execution_count": 6,
+    "maximum_additional_executions": 2,
+    "maximum_cumulative_executions": 7,
+    "predecessor_failed_record_sha256": "5832d6948bec3e4e672227200bf9e03484e5515afa2c3a14e07682e3200cf6f5"
+  },
+  "runtime": {
+    "container_isolation": "passed",
+    "execution_count": 6,
+    "host_http_https_isolation": "passed",
+    "image_oci_index_digest": "sha256:c03e9acab0ef6bd67cd44b968d10c40c13f4079164b8fe02148de45dbd0c0649",
+    "lean_cli_version": "1.0.227",
+    "lean_engine_version": "2.5.0.0",
+    "platform": "linux/amd64",
+    "platform_manifest_digest": "sha256:6cdc4112fa14ed99eca5c313bc84c8008cc07d6143e25b3f6ddeb01df2501f0e",
+    "pull_count": 1,
+    "rootless_docker_validation": "passed"
+  },
+  "safety": {
+    "broker_or_exchange_connectivity": false,
+    "external_market_data": false,
+    "live_deployment": false,
+    "optimization": false,
+    "system_docker_contacted": false
+  },
+  "scenario": {
+    "contract_version": "1.0.0",
+    "fixture": "synthetic_weekdays.csv",
+    "scenario_id": "weekday_ma_next_open_v1",
+    "schema_version": "1.0.0"
+  },
+  "schema_version": "1.0.0"
+}

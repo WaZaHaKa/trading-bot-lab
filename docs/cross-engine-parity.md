@@ -207,12 +207,20 @@ ratio tolerance. Execution-timing parity is therefore `passed`; numerical
 accounting/risk parity and the overall genuine-local result are `failed`. No
 profitability or strategy-quality claim follows from this validation run.
 
-The LEAN adapter now builds its pre-trade risk snapshot explicitly from
-pre-fill cash, quantity, and the timestamp-matched execution open. Offline
-regressions reproduce the old close-mark ratios and place the corrected open
-ratios within the unchanged contract tolerance. This implementation result is
-not a genuine LEAN observation: the historical failed record remains unchanged,
-and overall parity remains failed until a gated rerun passes all dimensions.
+The LEAN adapter correction builds its pre-trade risk snapshot explicitly from
+pre-fill cash, quantity, and the timestamp-matched execution open. After the
+correction commit passed the full local gate and both CI platforms, authorization
+batch `open-phase-risk-correction-1` consumed one additional cached-image
+execution, bringing the permanent cumulative count to six. The genuine rerun
+matched all sixteen dimensions; the three exit ratios were within the unchanged
+`0.0000001` tolerance.
+
+The historical failed record remains byte-for-byte unchanged. The separate
+content-bound rerun record is
+`contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json`.
+Execution-timing and numerical accounting parity are therefore `passed` for
+this exact synthetic fixture. This does not establish strategy quality,
+profitability, or general cross-engine equivalence.
 
 ## Failure rule
 

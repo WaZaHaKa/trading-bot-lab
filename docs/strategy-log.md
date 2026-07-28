@@ -687,3 +687,49 @@ No image pull, cloud command, Object Store operation, external market-data
 request, broker/exchange connection, optimization, system-Docker access, or live
 deployment occurred. Raw logs, traces, runtime output, and machine metadata
 remain ignored and untracked.
+
+## 2026-07-28 - Fixed-parameter rolling walk-forward v1
+
+### Scope
+
+This phase implemented and validated research infrastructure only. It did not
+test a profitability hypothesis, start a cloud backtest or optimization, use
+Object Store, move market data, connect to a broker/exchange, or perform paper
+or live trading.
+
+### Predeclared evaluation
+
+Before any result was observed, protocol `1.0.0` fixed five non-overlapping
+adjusted-daily-SPY evaluation folds: `spy-2021` (2021-01-01 through 2021-12-31),
+`spy-2022` (2022-01-01 through 2022-12-31), `spy-2023` (2023-01-01 through
+2023-12-31), `spy-2024` (2024-01-01 through 2024-12-31), and `spy-2025`
+(2025-01-01 through 2025-12-31). No fold tunes, selects, ranks, or replaces a
+parameter for another fold; this is fixed-parameter rolling evaluation, not
+optimization.
+
+### Bound contract
+
+Every fold uses USD 100,000, adjusted SPY daily bars, 20/50 completed-close
+moving averages, 50 warmup bars, a 10% long-or-flat target/position cap, 30%
+gross cap, cash account, leverage one, one-basis-point fees with a USD 1 minimum,
+two-basis-point adverse slippage, 2% daily-loss and 5% drawdown limits, and
+next-market-open execution. Warmup may read completed pre-start bars but cannot
+submit orders or contribute trades or metrics. `daily_precise_end_time = True`
+pins daily bars to market close; public start/end dates pass to LEAN unchanged
+as inclusive calendar-date boundaries.
+
+A halt latches, cancels pending orders, blocks later orders, and does not
+automatically liquidate an existing position. This mission-specific behavior
+deliberately differs from the older cloud baseline and does not reinterpret the
+historical parity contract or either parity evidence record.
+
+### Evidence and decision
+
+The dedicated project, versioned manifest/schemas, strict extractor, exact-five
+aggregator, and print-only six-phase local operator are implemented. Raw output
+remains ignored; normalized evidence is sanitized and content-bound. Runtime
+versions are reported per fold and as a consistency field, not used as a hidden
+quality threshold. Zero walk-forward cloud executions and zero fold results
+exist. A separate human authorization is required before exactly the five
+printed commands may be run; no profitability, robustness, paper-readiness, or
+live-readiness conclusion exists.

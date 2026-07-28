@@ -132,3 +132,50 @@ See ADR 0004 for the shared local event-core decision, ADR 0005 for exact local
 timing/accounting invariants, ADR 0006 for Sprint 2 provenance/report/replay
 contracts, ADR 0007 for LEAN activation, and
 `execution-timing-comparison.md` for the cross-engine boundary.
+
+## Fixed walk-forward validation boundary
+
+Walk-forward v1 adds a third, contract-driven research flow without changing
+the local oracle or historical parity path:
+
+```mermaid
+flowchart LR
+    P["Immutable v1 protocol and hashes"] --> W["Dedicated LEAN project"]
+    P --> O["Offline operator"]
+    O --> C["Exactly five printed future commands"]
+    C --> H["Separate human authorization"]
+    H -. "future manual execution only" .-> R["Ignored raw logs/results"]
+    R --> E["Bounded strict extractor"]
+    E --> F["Five sanitized fold observations"]
+    F --> A["Deterministic descriptive aggregate"]
+```
+
+The repository currently reaches the print-only boundary, not `R`: zero
+walk-forward cloud backtests or results exist. No operator phase executes LEAN
+or network work. `extract` and `aggregate` are offline local artifact phases.
+
+`walk_forward/contract.py` validates the canonical manifest, exact five folds,
+schema/source/configuration hashes, and fixed settings.
+`walk_forward/observation.py` parses one size-bounded canonical observation,
+caps total artifact reads, rejects non-regular/link-bearing paths, screens
+identity-bearing values, normalizes atomically, and derives an exact-five
+aggregate. Operator writes stay inside the ignored walk-forward report root and
+cannot replace an aggregate input. `walk_forward/operator.py` exposes `plan`, `validate`,
+`print-cloud-commands`, `extract`, `aggregate`, and `evidence`; the default plan
+is read-only and no cloud-run phase exists.
+
+The LEAN project maps only predeclared fold IDs. It uses adjusted daily SPY,
+precise market-close daily timestamps, 50 pre-start warmup bars without
+orders/metrics, completed-close signals, and next-open orders. The public dates
+are passed unchanged and remain inclusive. Fixed parameters cannot flow from one
+fold's results into another, so the workflow is rolling evaluation rather than
+optimization. A completed observation is impossible unless LEAN processes the
+final eligible exchange close in the public interval; an early stop or trailing
+data outage fails closed.
+
+Risk halts latch without automatic liquidation, cancel pending work, and retain
+valuation of an existing long. Raw engine artifacts remain ignored; only
+separately reviewed sanitized content-bound evidence may be tracked. Runtime
+drift is explicit aggregate metadata rather than a hidden pass threshold. No
+component promotes the strategy or claims profitability, robustness, paper
+readiness, or live readiness.

@@ -282,3 +282,81 @@ not a profitability, strategy-quality, or deployment claim.
 See `windows-lean-setup.md`, `qcc-guardrails.md`,
 `execution-timing-comparison.md`, `risk-policy-mapping.md`, and
 `cross-engine-parity.md`.
+
+## Fixed walk-forward v1 implementation
+
+This new path is separate from the completed historical activation commands and
+the immutable parity evidence above. It adds:
+
+```text
+lean-workspace/Strategies/WalkForwardMovingAverageV1/
+contracts/walk-forward/v1/
+src/trading_bot_lab/walk_forward/
+scripts/run_walk_forward_v1.py
+```
+
+The protocol is fixed-parameter rolling evaluation, not optimization. All five
+folds were declared before any result was seen:
+
+| Fold | Inclusive public evaluation dates |
+|---|---|
+| `spy-2021` | 2021-01-01 through 2021-12-31 |
+| `spy-2022` | 2022-01-01 through 2022-12-31 |
+| `spy-2023` | 2023-01-01 through 2023-12-31 |
+| `spy-2024` | 2024-01-01 through 2024-12-31 |
+| `spy-2025` | 2025-01-01 through 2025-12-31 |
+
+The closed project maps only those IDs and passes each public start/end date
+unchanged to `set_start_date`/`set_end_date`. LEAN treats the selected dates as
+inclusive calendar boundaries; only exchange sessions inside them produce
+evaluation bars. `daily_precise_end_time = True` makes a daily bar arrive at
+market close rather than the following midnight. Fifty completed preceding
+bars may seed warmup, but warmup cannot create an order, trade, or evaluation
+metric. The first eligible signal uses completed trailing history only and may
+execute only at the next market open inside the fold; a final signal expires.
+
+Every fold retains adjusted daily SPY, USD 100,000 initial cash, 20/50 periods,
+50-bar warmup, 10% target and position cap, 30% gross cap, cash account,
+leverage one, one-basis-point fee with USD 1 minimum, two-basis-point slippage,
+2% daily-loss limit, and 5% peak-drawdown limit. Live mode, optimization mode,
+any parameter outside the exact `fold-id`/`optimization-mode` name allowlist,
+unknown folds, alternate dates, margin, leverage, shorting, and external
+configuration drift fail closed.
+
+Unlike `MovingAverageBaseline`, the mission forbids automatic liquidation. A
+breach latches, cancels pending orders, blocks later orders, and keeps marking
+any existing long through the fold end. The older baseline behavior and both
+historical parity records retain their original meaning.
+
+### Local operator phases
+
+From the repository root:
+
+```powershell
+python scripts\run_walk_forward_v1.py
+python scripts\run_walk_forward_v1.py validate
+python scripts\run_walk_forward_v1.py print-cloud-commands
+```
+
+The default `plan`, `validate`, `print-cloud-commands`, and `evidence` phases are
+read-only. `extract` and `aggregate` accept only regular, non-link-bearing local
+inputs and make atomic writes only below ignored `reports/walk-forward/v1`;
+aggregate output cannot alias a fold input. Raw-log, normalized-observation, and
+aggregate reads are capped at 8 MiB, 64 KiB, and 512 KiB. No phase invokes LEAN,
+a network, or a cloud command. The printer emits exactly five named backtests
+for the closed fold set; executing exactly that bounded plan requires separate
+human authorization.
+
+After any future authorized run, raw logs/results remain ignored. Extraction
+requires exactly one bounded canonical observation, rejects identity-bearing
+content and provenance/schema drift, and binds source and public configuration.
+A completed observation additionally proves the final eligible exchange close
+was processed, so partial or trailing-data-outage runs fail closed. Aggregation
+requires all five folds, presents each fold before descriptive summaries, and
+reports runtime consistency separately. Contract completion is not strategy
+approval and no arbitrary performance threshold exists.
+
+Zero walk-forward cloud commands, optimization jobs, data uploads/downloads,
+Object Store actions, broker/exchange actions, paper trades, or live trades have
+occurred. There are no fold results and no profitability, robustness,
+paper-readiness, or live-readiness claim.

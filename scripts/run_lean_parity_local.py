@@ -13,7 +13,8 @@ import platform
 import shutil
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 
 from trading_bot_lab.artifacts import atomic_write_text
@@ -25,6 +26,7 @@ from trading_bot_lab.lean_runtime import (
     MUTABLE_DISCOVERY_IMAGE,
     OCI_INDEX_DIGEST,
     PINNED_IMAGE,
+    PINNED_IMAGE_UNAVAILABLE,
     PLATFORM_MANIFEST_DIGEST,
     PREPARE_AUTHORIZATION,
     PULL_AUTHORIZATION,
@@ -35,6 +37,7 @@ from trading_bot_lab.lean_runtime import (
     RUNTIME_CONTAINER_NAME,
     ExclusiveRunLock,
     LeanRuntimeError,
+    RegistryIdentity,
     assert_ignored_path,
     build_cli_general_config,
     build_extra_docker_config,
@@ -45,7 +48,8 @@ from trading_bot_lab.lean_runtime import (
     increment_pull,
     initialize_runtime_directory,
     load_runtime_state,
-    parse_registry_identity,
+    parse_mutable_discovery_metadata,
+    parse_pinned_registry_identity,
     require_authorization,
     validate_cli_version,
     validate_docker_info,
@@ -76,6 +80,7 @@ DATA_DIRECTORY = ROOT / "lean-workspace" / "data"
 REPORT_DIRECTORY = ROOT / "reports" / "parity"
 LOG_DIRECTORY = ROOT / "logs" / "parity"
 RUNTIME_DIRECTORY = LOG_DIRECTORY / "runtime-v1"
+ANONYMOUS_REGISTRY_DIRECTORY = LOG_DIRECTORY / "anonymous-registry-v1"
 STATE_PATH = LOG_DIRECTORY / "runtime-state.json"
 LOCK_PATH = LOG_DIRECTORY / "runtime-v1.lock"
 LOCAL_TRACE = REPORT_DIRECTORY / "local-v1.json"
@@ -207,6 +212,7 @@ def _validate_generated_paths() -> None:
         RUNTIME_AUDIT_PATH,
         PULL_LOG_PATH,
         RUNTIME_DIRECTORY,
+        ANONYMOUS_REGISTRY_DIRECTORY,
         STATE_PATH,
         LOCK_PATH,
         BACKTEST_DIRECTORY / "parity-v1-run-1",
@@ -293,6 +299,67 @@ def _inspect_local_image() -> dict[str, object]:
     }
 
 
+@contextmanager
+def _anonymous_registry_environment() -> Iterator[dict[str, str]]:
+    """Yield a Docker environment backed by an empty, temporary auth directory."""
+
+    _assert_git_ignored(ANONYMOUS_REGISTRY_DIRECTORY)
+    initialize_runtime_directory(ANONYMOUS_REGISTRY_DIRECTORY)
+    config = ANONYMOUS_REGISTRY_DIRECTORY / "config.json"
+    atomic_write_text(config, "{}\n")
+    config.chmod(0o600)
+    environment = _docker_environment()
+    environment["DOCKER_CONFIG"] = str(ANONYMOUS_REGISTRY_DIRECTORY)
+    try:
+        yield environment
+    finally:
+        cleanup_runtime_directory(ANONYMOUS_REGISTRY_DIRECTORY)
+
+
+def _inspect_pinned_registry(environment: Mapping[str, str]) -> RegistryIdentity:
+    try:
+        result = _run(
+            _docker_command("buildx", "imagetools", "inspect", PINNED_IMAGE),
+            environment=environment,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise LeanRuntimeError(PINNED_IMAGE_UNAVAILABLE) from exc
+    if result.returncode != 0:
+        raise LeanRuntimeError(PINNED_IMAGE_UNAVAILABLE)
+    return parse_pinned_registry_identity(result.stdout)
+
+
+def _inspect_mutable_discovery(environment: Mapping[str, str]) -> dict[str, object]:
+    try:
+        result = _run(
+            _docker_command("buildx", "imagetools", "inspect", MUTABLE_DISCOVERY_IMAGE),
+            environment=environment,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {
+            "authoritative": False,
+            "completion_status": "unavailable",
+            "reference": MUTABLE_DISCOVERY_IMAGE,
+        }
+    if result.returncode != 0:
+        return {
+            "authoritative": False,
+            "completion_status": "unavailable",
+            "reference": MUTABLE_DISCOVERY_IMAGE,
+        }
+    try:
+        discovery = parse_mutable_discovery_metadata(result.stdout)
+    except LeanRuntimeError:
+        return {
+            "authoritative": False,
+            "completion_status": "malformed",
+            "reference": MUTABLE_DISCOVERY_IMAGE,
+        }
+    return {**discovery.as_dict(), "completion_status": "observed"}
+
+
 def pull_image(authorization: str | None) -> None:
     """Perform the one authorized immutable rootless image pull."""
 
@@ -302,39 +369,36 @@ def pull_image(authorization: str | None) -> None:
         state = load_runtime_state(STATE_PATH)
         if state.pulls:
             raise LeanRuntimeError("the one authorized image pull was already consumed")
-        registry = _run(
-            _docker_command(
-                "buildx",
-                "imagetools",
-                "inspect",
-                MUTABLE_DISCOVERY_IMAGE,
-            ),
-            environment=_docker_environment(),
-        )
-        parse_registry_identity(registry.stdout)
-        LOG_DIRECTORY.mkdir(parents=True, exist_ok=True)
-        _assert_git_ignored(PULL_LOG_PATH)
-        next_state = increment_pull(state)
-        write_runtime_state(STATE_PATH, next_state)
-        with PULL_LOG_PATH.open("w", encoding="utf-8", newline="\n") as handle:
-            result = subprocess.run(
-                _docker_command(
-                    "pull",
-                    "--platform",
-                    EXPECTED_PLATFORM,
-                    PINNED_IMAGE,
-                ),
-                cwd=ROOT,
-                env=_docker_environment(),
-                check=False,
-                stdout=handle,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=1800,
-            )
+        with _anonymous_registry_environment() as registry_environment:
+            registry = _inspect_pinned_registry(registry_environment)
+            discovery = _inspect_mutable_discovery(registry_environment)
+            LOG_DIRECTORY.mkdir(parents=True, exist_ok=True)
+            _assert_git_ignored(PULL_LOG_PATH)
+            next_state = increment_pull(state)
+            write_runtime_state(STATE_PATH, next_state)
+            with PULL_LOG_PATH.open("w", encoding="utf-8", newline="\n") as handle:
+                result = subprocess.run(
+                    _docker_command(
+                        "image",
+                        "pull",
+                        "--platform",
+                        EXPECTED_PLATFORM,
+                        PINNED_IMAGE,
+                    ),
+                    cwd=ROOT,
+                    env=dict(registry_environment),
+                    check=False,
+                    stdout=handle,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=1800,
+                )
         if result.returncode != 0:
             raise LeanRuntimeError("authorized immutable image pull failed")
-        _write_public_json(IMAGE_RECORD_PATH, _inspect_local_image())
+        image_record = _inspect_local_image()
+        image_record["immutable_registry_identity"] = registry.as_dict()
+        image_record["mutable_discovery"] = discovery
+        _write_public_json(IMAGE_RECORD_PATH, image_record)
     print("Immutable LEAN image pull: verified")
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -11,8 +12,11 @@ from trading_bot_lab.lean_runtime import (
     EXPECTED_CLI_VERSION,
     FIXTURE_SHA256,
     MAX_EXECUTIONS,
+    MUTABLE_DISCOVERY_IMAGE,
     OCI_INDEX_DIGEST,
     PINNED_IMAGE,
+    PINNED_IMAGE_UNAVAILABLE,
+    PINNED_PLATFORM_MANIFEST_MISMATCH,
     PLATFORM_MANIFEST_DIGEST,
     PREPARE_AUTHORIZATION,
     PULL_AUTHORIZATION,
@@ -33,7 +37,8 @@ from trading_bot_lab.lean_runtime import (
     increment_pull,
     initialize_runtime_directory,
     load_runtime_state,
-    parse_registry_identity,
+    parse_mutable_discovery_metadata,
+    parse_pinned_registry_identity,
     public_contract_summary,
     require_authorization,
     sanitize_generated_lean_config,
@@ -53,6 +58,9 @@ from trading_bot_lab.lean_runtime import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_FIXTURE = ROOT / "tests" / "fixtures" / "parity" / "v1" / "synthetic_weekdays.csv"
+
+MOVED_LATEST_INDEX = "sha256:" + "1" * 64
+MOVED_LATEST_AMD64 = "sha256:" + "2" * 64
 
 
 def docker_info(home: Path) -> dict[str, object]:
@@ -109,14 +117,26 @@ def actual_container(root: Path) -> dict[str, object]:
     }
 
 
-def registry_output() -> str:
+def pinned_registry_output() -> str:
     return (
-        "Name:      docker.io/quantconnect/lean:latest\n"
+        f"Name:      docker.io/{PINNED_IMAGE}\n"
         "MediaType: application/vnd.oci.image.index.v1+json\n"
         f"Digest:    {OCI_INDEX_DIGEST}\n"
         "\n"
         "Manifests:\n"
         f"  Name:      docker.io/quantconnect/lean@{PLATFORM_MANIFEST_DIGEST}\n"
+        "  Platform:  linux/amd64\n"
+    )
+
+
+def moved_latest_output() -> str:
+    return (
+        "Name:      docker.io/quantconnect/lean:latest\n"
+        "MediaType: application/vnd.oci.image.index.v1+json\n"
+        f"Digest:    {MOVED_LATEST_INDEX}\n"
+        "\n"
+        "Manifests:\n"
+        f"  Name:      docker.io/quantconnect/lean:latest@{MOVED_LATEST_AMD64}\n"
         "  Platform:  linux/amd64\n"
     )
 
@@ -192,22 +212,53 @@ def test_local_image_identity_requires_exact_repo_digest_and_platform() -> None:
         validate_local_image(wrong_platform)
 
 
-def test_registry_resolution_requires_exact_index_and_platform_manifest() -> None:
-    identity = parse_registry_identity(registry_output())
+def test_pinned_registry_identity_is_independent_of_moved_latest() -> None:
+    identity = parse_pinned_registry_identity(pinned_registry_output())
+    discovery = parse_mutable_discovery_metadata(moved_latest_output())
+
     assert identity.index_digest == OCI_INDEX_DIGEST
     assert identity.platform_digest == PLATFORM_MANIFEST_DIGEST
+    assert identity.as_dict()["authoritative"] is True
+    assert discovery.index_digest == MOVED_LATEST_INDEX
+    assert discovery.platform_digest == MOVED_LATEST_AMD64
+    assert discovery.as_dict()["authoritative"] is False
 
-    with pytest.raises(LeanRuntimeError):
-        parse_registry_identity(
-            registry_output().replace(PLATFORM_MANIFEST_DIGEST, "sha256:" + "0" * 64)
+
+def test_pinned_registry_identity_rejects_changed_platform_manifest() -> None:
+    with pytest.raises(LeanRuntimeError, match=PINNED_PLATFORM_MANIFEST_MISMATCH):
+        parse_pinned_registry_identity(
+            pinned_registry_output().replace(
+                PLATFORM_MANIFEST_DIGEST,
+                "sha256:" + "0" * 64,
+            )
         )
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        "malformed",
+        pinned_registry_output().replace(
+            "docker.io/quantconnect/lean@",
+            "docker.io/other/lean@",
+        ),
+        pinned_registry_output().replace(OCI_INDEX_DIGEST, "sha256:" + "0" * 64),
+        pinned_registry_output().replace(OCI_INDEX_DIGEST, "sha256:not-a-digest"),
+    ],
+)
+def test_pinned_registry_identity_rejects_unavailable_or_ambiguous_reference(
+    output: str,
+) -> None:
+    with pytest.raises(LeanRuntimeError, match=PINNED_IMAGE_UNAVAILABLE):
+        parse_pinned_registry_identity(output)
+
+
+def test_mutable_discovery_rejects_repository_ambiguity() -> None:
     with pytest.raises(LeanRuntimeError):
-        parse_registry_identity("malformed")
-    with pytest.raises(LeanRuntimeError):
-        parse_registry_identity(
-            registry_output().replace(
+        parse_mutable_discovery_metadata(
+            moved_latest_output().replace(
                 "docker.io/quantconnect/lean:latest",
-                "docker.io/quantconnect/lean-alternate:latest",
+                "docker.io/other/lean:latest",
             )
         )
 
@@ -244,6 +295,111 @@ def test_operator_rejects_pull_and_run_before_preflight_without_authorization(
     with pytest.raises(LeanRuntimeError):
         operator.run_lean(None)
     assert called is False
+
+
+def test_pull_validates_pinned_digest_and_records_latest_as_non_authoritative(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    commands: list[tuple[str, ...]] = []
+    pull_commands: list[tuple[str, ...]] = []
+    record: dict[str, object] = {}
+    log_directory = tmp_path / "logs"
+
+    monkeypatch.setattr(operator, "LOG_DIRECTORY", log_directory)
+    monkeypatch.setattr(
+        operator,
+        "ANONYMOUS_REGISTRY_DIRECTORY",
+        log_directory / "anonymous-registry-v1",
+    )
+    monkeypatch.setattr(operator, "STATE_PATH", log_directory / "state.json")
+    monkeypatch.setattr(operator, "LOCK_PATH", log_directory / "runtime.lock")
+    monkeypatch.setattr(operator, "PULL_LOG_PATH", log_directory / "pull.log")
+    monkeypatch.setattr(operator, "IMAGE_RECORD_PATH", tmp_path / "image.json")
+    monkeypatch.setattr(operator, "perform_preflight", lambda: None)
+    monkeypatch.setattr(operator, "_assert_git_ignored", lambda path: None)
+    monkeypatch.setattr(
+        operator,
+        "_inspect_local_image",
+        lambda: {"completion_status": "verified"},
+    )
+    monkeypatch.setattr(
+        operator,
+        "_write_public_json",
+        lambda path, payload: record.update(payload),
+    )
+
+    def fake_run(
+        command: tuple[str, ...],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        selected = tuple(command)
+        commands.append(selected)
+        if selected[-1] == PINNED_IMAGE:
+            output = pinned_registry_output()
+        elif selected[-1] == MUTABLE_DISCOVERY_IMAGE:
+            output = moved_latest_output()
+        else:
+            raise AssertionError(f"unexpected Docker command: {selected!r}")
+        return subprocess.CompletedProcess(selected, 0, output, "")
+
+    def fake_subprocess_run(
+        command: tuple[str, ...],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        environment = kwargs.get("env")
+        assert isinstance(environment, dict)
+        assert environment["DOCKER_HOST"] == ROOTLESS_HOST
+        assert environment["DOCKER_CONFIG"] == str(operator.ANONYMOUS_REGISTRY_DIRECTORY)
+        selected = tuple(command)
+        pull_commands.append(selected)
+        return subprocess.CompletedProcess(selected, 0, "", "")
+
+    monkeypatch.setattr(operator, "_run", fake_run)
+    monkeypatch.setattr(operator.subprocess, "run", fake_subprocess_run)
+
+    operator.pull_image(PULL_AUTHORIZATION)
+
+    assert [command[-1] for command in commands] == [
+        PINNED_IMAGE,
+        MUTABLE_DISCOVERY_IMAGE,
+    ]
+    assert pull_commands == [
+        (
+            "docker",
+            "--host",
+            ROOTLESS_HOST,
+            "image",
+            "pull",
+            "--platform",
+            "linux/amd64",
+            PINNED_IMAGE,
+        )
+    ]
+    assert MUTABLE_DISCOVERY_IMAGE not in pull_commands[0]
+    assert record["immutable_registry_identity"]["authoritative"] is True
+    assert record["mutable_discovery"] == {
+        "authoritative": False,
+        "completion_status": "observed",
+        "index_digest": MOVED_LATEST_INDEX,
+        "platform": "linux/amd64",
+        "platform_manifest_digest": MOVED_LATEST_AMD64,
+        "reference": MUTABLE_DISCOVERY_IMAGE,
+    }
+    assert not operator.ANONYMOUS_REGISTRY_DIRECTORY.exists()
+
+
+def test_unavailable_pinned_registry_identity_blocks_before_pull(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        operator,
+        "_run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "not found"),
+    )
+    with pytest.raises(LeanRuntimeError, match=PINNED_IMAGE_UNAVAILABLE):
+        operator._inspect_pinned_registry({})
 
 
 def test_bounded_state_allows_one_pull_and_five_executions(tmp_path: Path) -> None:

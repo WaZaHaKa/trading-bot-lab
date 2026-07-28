@@ -220,6 +220,11 @@ The runtime accepts only LEAN CLI `1.0.227` and
 `quantconnect/lean@sha256:c03e9acab0ef6bd67cd44b968d10c40c13f4079164b8fe02148de45dbd0c0649`
 for `linux/amd64`, whose expected platform manifest is
 `sha256:6cdc4112fa14ed99eca5c313bc84c8008cc07d6143e25b3f6ddeb01df2501f0e`.
+A mutable tag moving after an immutable digest has been reviewed is expected
+and does not invalidate that digest. Runtime execution validates and uses the
+immutable digest directly. The optional `latest` observation is stored only as
+sanitized, explicitly non-authoritative discovery metadata.
+
 It validates the explicit rootless Unix socket and daemon identity, refuses
 system Docker, disables CLI database updates, and uses a private temporary HOME
 without credentials. Host HTTP and HTTPS are forced to a failing local proxy

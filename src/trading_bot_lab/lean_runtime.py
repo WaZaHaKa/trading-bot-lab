@@ -43,6 +43,9 @@ TIMEFRAME_SECONDS = 86_400
 EXECUTION_MODEL = "next_bar_open"
 MAX_EXECUTIONS = 5
 
+PINNED_IMAGE_UNAVAILABLE = "PINNED_IMAGE_UNAVAILABLE"
+PINNED_PLATFORM_MANIFEST_MISMATCH = "PINNED_PLATFORM_MANIFEST_MISMATCH"
+
 PULL_AUTHORIZATION = "pull-pinned-lean-parity-image"
 PREPARE_AUTHORIZATION = "prepare-exact-parity-fixture"
 RUN_AUTHORIZATION = "execute-pinned-parity-v1"
@@ -84,6 +87,34 @@ class RegistryIdentity:
     index_digest: str
     platform: str
     platform_digest: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "authoritative": True,
+            "index_digest": self.index_digest,
+            "platform": self.platform,
+            "platform_manifest_digest": self.platform_digest,
+            "reference": PINNED_IMAGE,
+            "repository": self.repository,
+        }
+
+
+@dataclass(frozen=True)
+class RegistryDiscoveryMetadata:
+    """Sanitized non-authoritative observation of one mutable discovery tag."""
+
+    index_digest: str
+    platform: str
+    platform_digest: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "authoritative": False,
+            "index_digest": self.index_digest,
+            "platform": self.platform,
+            "platform_manifest_digest": self.platform_digest,
+            "reference": MUTABLE_DISCOVERY_IMAGE,
+        }
 
 
 @dataclass(frozen=True)
@@ -212,31 +243,84 @@ def validate_docker_info(
     )
 
 
-def parse_registry_identity(output: str) -> RegistryIdentity:
-    """Parse the bounded buildx summary and reject an altered registry mapping."""
+def _parse_registry_summary(
+    output: str,
+) -> tuple[str, str, str, list[tuple[str, str, str]]]:
+    """Parse only public image identity fields from one buildx summary."""
 
     name_match = re.search(r"(?m)^Name:\s+(?:docker\.io/)?([^\s]+)$", output)
+    media_type_match = re.search(r"(?m)^MediaType:\s+([^\s]+)$", output)
     digest_match = re.search(r"(?m)^Digest:\s+(sha256:[0-9a-f]{64})$", output)
-    if name_match is None or digest_match is None:
-        raise LeanRuntimeError("registry metadata is incomplete")
-    repository_and_ref = name_match.group(1)
-    if repository_and_ref != MUTABLE_DISCOVERY_IMAGE:
-        raise LeanRuntimeError("registry metadata resolved to an unauthorized repository")
-    index_digest = digest_match.group(1)
+    if name_match is None or media_type_match is None or digest_match is None:
+        raise LeanRuntimeError("registry metadata is incomplete or malformed")
     platform_entries = re.findall(
-        r"(?ms)^\s*Name:\s+[^\s]+@(sha256:[0-9a-f]{64}).*?"
-        r"^\s*Platform:\s+([^\s]+)$",
+        r"(?ms)^\s+Name:\s+(?:docker\.io/)?([^\s@]+)@"
+        r"(sha256:[0-9a-f]{64}).*?^\s+Platform:\s+([^\s]+)$",
         output,
     )
+    return (
+        name_match.group(1),
+        media_type_match.group(1),
+        digest_match.group(1),
+        platform_entries,
+    )
+
+
+def parse_pinned_registry_identity(output: str) -> RegistryIdentity:
+    """Validate the approved immutable index and its exact platform manifest."""
+
+    try:
+        repository_and_ref, media_type, index_digest, platform_entries = _parse_registry_summary(
+            output
+        )
+    except LeanRuntimeError as exc:
+        raise LeanRuntimeError(PINNED_IMAGE_UNAVAILABLE) from exc
+    accepted_media_types = {
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.oci.image.index.v1+json",
+    }
+    if (
+        repository_and_ref != PINNED_IMAGE
+        or index_digest != OCI_INDEX_DIGEST
+        or media_type not in accepted_media_types
+        or not platform_entries
+        or any(repository != "quantconnect/lean" for repository, _, _ in platform_entries)
+    ):
+        raise LeanRuntimeError(PINNED_IMAGE_UNAVAILABLE)
     selected = [
         digest
-        for digest, selected_platform in platform_entries
+        for _, digest, selected_platform in platform_entries
         if selected_platform == EXPECTED_PLATFORM
     ]
-    if index_digest != OCI_INDEX_DIGEST or selected != [PLATFORM_MANIFEST_DIGEST]:
-        raise LeanRuntimeError("registry image identity differs from the pinned runtime contract")
+    if selected != [PLATFORM_MANIFEST_DIGEST]:
+        raise LeanRuntimeError(PINNED_PLATFORM_MANIFEST_MISMATCH)
     return RegistryIdentity(
         repository="quantconnect/lean",
+        index_digest=index_digest,
+        platform=EXPECTED_PLATFORM,
+        platform_digest=selected[0],
+    )
+
+
+def parse_mutable_discovery_metadata(output: str) -> RegistryDiscoveryMetadata:
+    """Parse a mutable tag only as sanitized, explicitly non-authoritative metadata."""
+
+    repository_and_ref, _, index_digest, platform_entries = _parse_registry_summary(output)
+    if repository_and_ref != MUTABLE_DISCOVERY_IMAGE:
+        raise LeanRuntimeError("mutable discovery metadata resolved to an unexpected reference")
+    allowed_names = {"quantconnect/lean", MUTABLE_DISCOVERY_IMAGE}
+    if not platform_entries or any(
+        repository not in allowed_names for repository, _, _ in platform_entries
+    ):
+        raise LeanRuntimeError("mutable discovery metadata contains repository ambiguity")
+    selected = [
+        digest
+        for _, digest, selected_platform in platform_entries
+        if selected_platform == EXPECTED_PLATFORM
+    ]
+    if len(selected) != 1:
+        raise LeanRuntimeError("mutable discovery metadata lacks one linux/amd64 manifest")
+    return RegistryDiscoveryMetadata(
         index_digest=index_digest,
         platform=EXPECTED_PLATFORM,
         platform_digest=selected[0],
@@ -1054,6 +1138,8 @@ __all__ = [
     "NORMALIZED_BARS_SHA256",
     "OCI_INDEX_DIGEST",
     "PINNED_IMAGE",
+    "PINNED_IMAGE_UNAVAILABLE",
+    "PINNED_PLATFORM_MANIFEST_MISMATCH",
     "PLATFORM_MANIFEST_DIGEST",
     "PREPARE_AUTHORIZATION",
     "PULL_AUTHORIZATION",
@@ -1063,6 +1149,7 @@ __all__ = [
     "RUNTIME_CONTAINER_LABEL",
     "RUNTIME_CONTAINER_LABEL_VALUE",
     "RUNTIME_CONTAINER_NAME",
+    "RegistryIdentity",
     "RuntimeState",
     "SYMBOL",
     "TIMEFRAME_SECONDS",
@@ -1078,7 +1165,8 @@ __all__ = [
     "install_lean_cli_runtime_guards",
     "load_runtime_state",
     "map_machine_platform",
-    "parse_registry_identity",
+    "parse_mutable_discovery_metadata",
+    "parse_pinned_registry_identity",
     "public_contract_summary",
     "require_authorization",
     "validate_actual_container",

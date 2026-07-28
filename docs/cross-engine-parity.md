@@ -168,6 +168,11 @@ The contract accepts one immutable OCI index and its one `linux/amd64`
 platform manifest, LEAN CLI `1.0.227`, and the explicit user-owned rootless
 Docker socket. The host CLI gets a private credential-free HOME and failing
 HTTP/HTTPS proxy while Docker SDK access to the Unix socket must still succeed.
+A mutable tag moving after an immutable digest has been reviewed is expected
+and does not invalidate that digest. Runtime execution validates and uses the
+immutable digest directly. Mutable discovery metadata cannot authorize a pull,
+an engine container, or a parity claim.
+
 The realized engine container is validated before start with no network,
 published ports, privilege, host namespaces, Docker socket, credentials, or
 mounts beyond the exact temporary project, data, output, and CLI paths.

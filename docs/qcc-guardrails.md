@@ -35,3 +35,32 @@ Before each cloud backtest:
 
 Cloud and local backtests are hypothetical. They place no real orders, make no
 profitability claim, and are not financial advice.
+
+## Future fixed walk-forward gate
+
+The two-project gate above is retained as completed historical activation
+procedure. It does not authorize the new walk-forward plan.
+
+`python scripts/run_walk_forward_v1.py print-cloud-commands` is print-only and
+network-free. It outputs exactly five future backtests named
+`wf-v1-spy-2021` through `wf-v1-spy-2025`, all scoped to
+`Strategies/WalkForwardMovingAverageV1` with one closed `fold-id`. The helper
+has no executable cloud-run phase and is never called by CI or `make check` to
+start work.
+
+A later human authorization must cover exactly those five printed commands.
+Before any command, re-run preflight, review the source/configuration hashes and
+private project mapping, verify the one fold/name pair, and confirm the command
+contains no force, verbose, open, optimization, live, data-download, or Object
+Store option. Stop if the printer output differs or the project is not safely
+linked.
+
+That future authorization would permit only the named cloud backtests. It would
+not authorize `lean data`, `--download-data`, dataset purchases, Object Store
+reads/writes, arbitrary pushes/projects/dates, optimization, a broker/exchange
+connection, paper trading, or live trading. Raw output must remain ignored;
+only separately reviewed sanitized content-bound evidence may be tracked.
+
+No walk-forward command has been executed and no QCC has been intentionally
+consumed by this workflow. No fold result, profitability conclusion, or
+paper/live approval exists.

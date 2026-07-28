@@ -61,6 +61,11 @@ REQUIRED_FILES = [
     "contracts/lean-local-parity/v1/2026-07-28.json",
     "contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json",
     "contracts/lean-local-parity/v1/record.schema.json",
+    "contracts/walk-forward/v1/README.md",
+    "contracts/walk-forward/v1/protocol.json",
+    "contracts/walk-forward/v1/protocol.schema.json",
+    "contracts/walk-forward/v1/observation.schema.json",
+    "contracts/walk-forward/v1/aggregate-record.schema.json",
     "tests/test_lean_local_parity_evidence.py",
     "src/trading_bot_lab/parity/__init__.py",
     "src/trading_bot_lab/parity/contract.py",
@@ -68,6 +73,10 @@ REQUIRED_FILES = [
     "src/trading_bot_lab/parity/compare.py",
     "src/trading_bot_lab/parity/lean.py",
     "src/trading_bot_lab/lean_validation.py",
+    "src/trading_bot_lab/walk_forward/__init__.py",
+    "src/trading_bot_lab/walk_forward/contract.py",
+    "src/trading_bot_lab/walk_forward/observation.py",
+    "src/trading_bot_lab/walk_forward/operator.py",
     "data/local/.gitkeep",
     "data/sample/README.md",
     "data/sample/synthetic_spy_daily.csv",
@@ -79,6 +88,7 @@ REQUIRED_FILES = [
     "scripts/prepare_lean_parity_data.py",
     "scripts/compare_lean_parity.py",
     "scripts/extract_lean_parity.py",
+    "scripts/run_walk_forward_v1.py",
     "lean-workspace/README.md",
     "lean-workspace/Strategies/SkeletonBacktest/main.py",
     "lean-workspace/Strategies/SkeletonBacktest/README.md",
@@ -89,6 +99,9 @@ REQUIRED_FILES = [
     "lean-workspace/Strategies/ParityFixtureV1/main.py",
     "lean-workspace/Strategies/ParityFixtureV1/README.md",
     "lean-workspace/Strategies/ParityFixtureV1/config.json",
+    "lean-workspace/Strategies/WalkForwardMovingAverageV1/main.py",
+    "lean-workspace/Strategies/WalkForwardMovingAverageV1/README.md",
+    "lean-workspace/Strategies/WalkForwardMovingAverageV1/config.json",
     "lean/README.md",
     "lean/algorithms/README.md",
     "lean/algorithms/MovingAverageBaseline/README.md",
@@ -293,6 +306,10 @@ EXPECTED_IGNORED_PATHS = (
     "lean-workspace/api-token.txt",
     "reports/parity/lean-observation.json",
     "logs/parity/lean-backtest.log",
+    "lean-workspace/Strategies/WalkForwardMovingAverageV1/backtests/wf-v1-spy-2021/result.json",
+    "logs/walk-forward/v1/wf-v1-spy-2021.log",
+    "reports/walk-forward/v1/observations/spy-2021.json",
+    "reports/walk-forward/v1/aggregate-record.json",
     "lean-workspace/api-access-token.txt",
     "lean-workspace/auth-token.txt",
 )
@@ -310,6 +327,19 @@ EXPECTED_TRACKABLE_PATHS = (
     "lean-workspace/Strategies/ParityFixtureV1/main.py",
     "lean-workspace/Strategies/ParityFixtureV1/config.json",
     "lean-workspace/Strategies/ParityFixtureV1/README.md",
+    "lean-workspace/Strategies/WalkForwardMovingAverageV1/main.py",
+    "lean-workspace/Strategies/WalkForwardMovingAverageV1/config.json",
+    "lean-workspace/Strategies/WalkForwardMovingAverageV1/README.md",
+    "contracts/walk-forward/v1/README.md",
+    "contracts/walk-forward/v1/protocol.json",
+    "contracts/walk-forward/v1/protocol.schema.json",
+    "contracts/walk-forward/v1/observation.schema.json",
+    "contracts/walk-forward/v1/aggregate-record.schema.json",
+    "src/trading_bot_lab/walk_forward/__init__.py",
+    "src/trading_bot_lab/walk_forward/contract.py",
+    "src/trading_bot_lab/walk_forward/observation.py",
+    "src/trading_bot_lab/walk_forward/operator.py",
+    "scripts/run_walk_forward_v1.py",
 )
 
 
@@ -444,13 +474,12 @@ def _normalized_json_keys(value: Any) -> set[str]:
     return keys
 
 
-def _lean_workspace_findings(root: Path) -> list[str]:
+def _lean_workspace_findings(root: Path, candidates: list[str]) -> list[str]:
     findings: list[str] = []
     if (root / ".lean").exists():
         findings.append("repository-local .lean directory is forbidden")
 
-    workspace = root / "lean-workspace"
-    if not workspace.exists():
+    if not (root / "lean-workspace").exists():
         return findings
 
     sensitive_name_parts = (
@@ -465,12 +494,18 @@ def _lean_workspace_findings(root: Path) -> list[str]:
         "private-key",
         "secret",
     )
-    for path in workspace.rglob("*"):
-        if not path.is_file():
+    for candidate in candidates:
+        relative = candidate.replace("\\", "/")
+        git_path = PurePosixPath(relative)
+        if git_path.parts[:1] != ("lean-workspace",):
             continue
-        relative_parts = path.relative_to(workspace).parts
-        relative = path.relative_to(root).as_posix()
         if relative == "lean-workspace/lean.json":
+            continue
+        path = root / relative
+        if not path.exists() or not path.is_file() or path.is_symlink():
+            continue
+        relative_parts = git_path.parts[1:]
+        if not relative_parts:
             continue
         lowered_name = path.name.lower().replace("_", "-")
         if any(part.lower() == ".lean" for part in relative_parts):
@@ -631,7 +666,7 @@ def main() -> int:
             continue
         findings.extend(_scan_text(relative.replace("\\", "/"), text))
 
-    findings.extend(_lean_workspace_findings(root))
+    findings.extend(_lean_workspace_findings(root, candidates))
     findings.extend(_tracked_lean_metadata_findings(root, tracked))
     findings.extend(_tracked_artifact_findings(tracked))
     findings.extend(_ignore_rule_findings(root))

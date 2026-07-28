@@ -16,8 +16,10 @@
 - The successful cloud runs establish engine, synchronization, and public
   source/configuration validation only. They did not execute the committed
   synthetic parity fixture.
-- Genuine local execution-timing parity passed, but numerical accounting/risk
-  parity failed on three exit-decision risk ratios. Overall parity is failed.
+- The first genuine local parity run passed timing but failed three numerical
+  risk ratios. That record remains immutable historical evidence. A separately
+  authorized corrected rerun later passed all 16 dimensions for the exact
+  eight-row fixture; it supersedes the overall status without erasing the failure.
 - Daily data cannot enforce or prove intraday daily-loss/stop behavior.
 - Cash-account settlement, exchange calendars, lot sizes, fills, and corporate
   actions differ from the local simulator.
@@ -62,6 +64,18 @@
   robustness, or strategy-quality claim.
 - No optimization, walk-forward result, Monte Carlo result, profitability
   claim, broker paper deployment, or live deployment exists in this sprint.
+- Fixed walk-forward v1 is implementation-only: no fold command has run, no
+  observation or aggregate result exists, and engine/data availability remains
+  external operator state.
+- Its five predeclared calendar-year folds evaluate only adjusted daily SPY.
+  They do not establish statistical independence, market breadth, or an edge.
+- Warmup may read preceding completed bars, but orders, trades, and evaluation
+  metrics begin only inside the public fold. Tests cannot prove future cloud
+  data has not changed.
+- Runtime-version differences are reported explicitly by aggregation. They do
+  not create an arbitrary promotion threshold or a strategy-quality verdict.
+- A walk-forward risk halt intentionally leaves an existing long position open
+  and marked; unlike the historical cloud baseline, it never auto-liquidates.
 - The repository is public but has no selected open-source license.
 
 Cloud and local backtests are hypothetical, place no real orders, are not
@@ -69,6 +83,7 @@ financial advice, and do not predict future results.
 
 The corrected rerun consumed one additional execution, leaving the permanent
 cumulative count at six; the authorized second execution was not used, and no
-image pull occurred. The next safe milestone is human review of the ready pull
-request. Object Store/cloud identical-data parity, other fixtures, walk-forward
-testing, and any deployment remain separate, explicitly reviewed work.
+image pull occurred. Its successful exact-fixture evidence remains historical.
+The next walk-forward gate is human review and separate authorization of exactly
+five printed cloud commands. Object Store, data transfer, optimization, broker,
+paper, live, and deployment work remain outside this protocol.

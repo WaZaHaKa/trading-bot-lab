@@ -1,17 +1,14 @@
 # LEAN cloud parity workspace
 
-This is the active, backtest-only LEAN workspace. It contains two deliberately
-small QuantConnect Cloud projects and one synthetic local parity project. It is
-an additive migration target: the
-historical `../lean/` tree remains untouched until both projects compile,
-backtest, and pass a documented parity review.
+This active backtest-only workspace contains two historical cloud projects, one
+synthetic local parity project, and one dedicated fixed walk-forward project.
+The preserved historical `../lean/` tree remains untouched.
 
 Live trading remains prohibited.
 
 ## Safety boundary
 
-- Cloud backtesting only. Both algorithms raise during initialization when
-  `live_mode` is true.
+- Backtesting only. Every project rejects LEAN live mode during initialization.
 - SPY daily data only; no crypto, derivatives, shorting, margin, leverage,
   optimization, broker integration, or live deployment configuration.
 - The projects never download local market data and contain no external API
@@ -37,6 +34,10 @@ Live trading remains prohibited.
 - `Strategies/ParityFixtureV1`: a synthetic, long-or-flat identical-data project
   whose local-file run is permitted only through the pinned rootless runtime
   operator in `scripts/run_lean_parity_local.py`.
+- `Strategies/WalkForwardMovingAverageV1`: a fixed 20/50 adjusted-daily-SPY
+  evaluation over the predeclared `spy-2021` through `spy-2025` folds. It accepts
+  only a closed fold ID, uses 50 preceding bars only for no-trade/no-metric
+  warmup, and emits one sanitized content-bound observation.
 
 The moving-average project separates signal, portfolio target, risk, and
 execution responsibilities. A completed daily close may create a target, but
@@ -78,7 +79,7 @@ is absent from `git ls-files`, and the staged project configs contain no linkage
 IDs. Repository preflight inspects the staged config blobs rather than trusting
 a different worktree copy.
 
-## Operator commands
+## Historical activation commands
 
 Authenticate interactively from the repository root. Do not place a token on
 the command line.
@@ -111,3 +112,34 @@ Do not add `--force`, `--open`, or `--verbose`. Do not run `lean data`, local
 `lean cloud live` command. `lean cloud status` reports live-deployment state,
 not cloud-backtest progress; the synchronous `lean cloud backtest` output is the
 CLI status stream for these runs.
+
+The two commands above are completed activation history, not walk-forward
+authorization.
+
+## Fixed walk-forward operator
+
+From the repository root:
+
+```powershell
+python scripts\run_walk_forward_v1.py
+python scripts\run_walk_forward_v1.py validate
+python scripts\run_walk_forward_v1.py print-cloud-commands
+```
+
+The default plan is read-only and network-free. The printer emits exactly five
+named future backtests and never starts them; the script has no cloud-run phase.
+Exactly those five commands require a separate human authorization. `extract`,
+`aggregate`, and `evidence` later process only existing ignored local artifacts.
+
+Every fold keeps USD 100,000, adjusted SPY daily data, 20/50 periods, 50-bar
+warmup, 10% target/position and 30% gross caps, cash account, leverage one, a
+1 bp fee with USD 1 minimum, 2 bp slippage, 2% daily-loss and 5% drawdown limits,
+and next-open execution. `daily_precise_end_time = True` pins the completed bar
+to market close; public dates pass unchanged as inclusive boundaries. A halt
+latches without automatic liquidation, unlike the older cloud baseline.
+
+No walk-forward cloud execution, optimization, data upload/download, Object
+Store action, broker/exchange action, paper trade, or live trade has occurred.
+Raw results stay ignored; only separately reviewed sanitized, content-bound
+evidence may be tracked. No fold result, profitability/robustness claim, or
+paper/live readiness exists.

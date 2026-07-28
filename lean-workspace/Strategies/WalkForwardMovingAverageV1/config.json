@@ -1,0 +1,8 @@
+{
+  "algorithm-language": "Python",
+  "parameters": {
+    "fold-id": "__required__",
+    "optimization-mode": "false"
+  },
+  "description": "Research-only fixed-parameter SPY walk-forward v1. Backtest only, live and optimization modes forbidden."
+}

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from scripts.preflight_check import (
+    _lean_workspace_findings,
     _tracked_artifact_findings,
     _tracked_lean_metadata_findings,
     _walk_sensitive_json,
@@ -155,11 +156,14 @@ def test_lean_workspace_is_active_backtest_only_and_legacy_is_preserved() -> Non
         "Strategies/ParityFixtureV1/README.md",
         "Strategies/ParityFixtureV1/config.json",
         "Strategies/ParityFixtureV1/main.py",
+        "Strategies/WalkForwardMovingAverageV1/README.md",
+        "Strategies/WalkForwardMovingAverageV1/config.json",
+        "Strategies/WalkForwardMovingAverageV1/main.py",
     }
     workspace_actual = {
-        path.relative_to(ROOT / "lean-workspace").as_posix()
-        for path in (ROOT / "lean-workspace").rglob("*")
-        if path.is_file()
+        relative.removeprefix("lean-workspace/")
+        for relative in git_source_files()
+        if relative.startswith("lean-workspace/")
     }
     assert workspace_files <= workspace_actual
     workspace_readme = (ROOT / "lean-workspace" / "README.md").read_text(encoding="utf-8")
@@ -201,6 +205,10 @@ def test_repository_current_state_is_public() -> None:
         "lean-workspace/Strategies/MovingAverageBaseline/optimizations/run/result.json",
         "lean-workspace/data/custom/parity/v1/synthetic_weekdays.csv",
         "lean-workspace/Strategies/ParityFixtureV1/backtests/run/result.json",
+        "lean-workspace/Strategies/WalkForwardMovingAverageV1/backtests/wf-v1-spy-2021/result.json",
+        "logs/walk-forward/v1/wf-v1-spy-2021.log",
+        "reports/walk-forward/v1/observations/spy-2021.json",
+        "reports/walk-forward/v1/aggregate-record.json",
         "reports/parity/lean-observation.json",
         "logs/parity/lean-backtest.log",
         "logs/parity/runtime-state.json",
@@ -239,6 +247,19 @@ def test_lean_workspace_generated_paths_are_ignored(relative: str) -> None:
         "lean-workspace/Strategies/ParityFixtureV1/main.py",
         "lean-workspace/Strategies/ParityFixtureV1/config.json",
         "lean-workspace/Strategies/ParityFixtureV1/README.md",
+        "lean-workspace/Strategies/WalkForwardMovingAverageV1/main.py",
+        "lean-workspace/Strategies/WalkForwardMovingAverageV1/config.json",
+        "lean-workspace/Strategies/WalkForwardMovingAverageV1/README.md",
+        "contracts/walk-forward/v1/README.md",
+        "contracts/walk-forward/v1/protocol.json",
+        "contracts/walk-forward/v1/protocol.schema.json",
+        "contracts/walk-forward/v1/observation.schema.json",
+        "contracts/walk-forward/v1/aggregate-record.schema.json",
+        "src/trading_bot_lab/walk_forward/__init__.py",
+        "src/trading_bot_lab/walk_forward/contract.py",
+        "src/trading_bot_lab/walk_forward/observation.py",
+        "src/trading_bot_lab/walk_forward/operator.py",
+        "scripts/run_walk_forward_v1.py",
         "tests/fixtures/parity/v1/scenario.json",
     ],
 )
@@ -293,22 +314,43 @@ def test_lean_workspace_json_has_no_sensitive_values() -> None:
             key.replace("_", "-")
         ]
 
-    for path in (ROOT / "lean-workspace").rglob("*.json"):
-        generated_parts = {
-            "data",
-            "storage",
-            "backtests",
-            "optimizations",
-            "live",
-            "logs",
-            "cache",
-            "results",
-        }
-        if generated_parts.intersection(part.lower() for part in path.parts):
+    generated_parts = {
+        "data",
+        "storage",
+        "backtests",
+        "optimizations",
+        "live",
+        "logs",
+        "cache",
+        "results",
+    }
+    for relative in git_source_files():
+        normalized = relative.replace("\\", "/")
+        if not normalized.startswith("lean-workspace/") or not normalized.endswith(".json"):
             continue
-        if path == ROOT / "lean-workspace" / "lean.json":
+        if generated_parts.intersection(part.lower() for part in normalized.split("/")[1:]):
             continue
+        if normalized == "lean-workspace/lean.json":
+            continue
+        path = ROOT / normalized
+        assert path.is_file()
+        assert not path.is_symlink()
         visit(json.loads(path.read_text(encoding="utf-8")))
+
+
+def test_lean_workspace_scan_uses_only_supplied_git_inventory(tmp_path: Path) -> None:
+    relative = "lean-workspace/Strategies/Example/config.json"
+    config = tmp_path / relative
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"algorithm-language": "Python", "api-token": "private-value"}),
+        encoding="utf-8",
+    )
+
+    assert _lean_workspace_findings(tmp_path, []) == []
+    assert _lean_workspace_findings(tmp_path, [relative]) == [
+        f"{relative} contains non-empty sensitive key: api-token"
+    ]
 
 
 @pytest.mark.parametrize("metadata_key", ["cloud-id", "organization-id", "local-id"])
@@ -429,6 +471,29 @@ def test_preflight_rejects_force_tracked_operator_linkage_file() -> None:
 
 
 @pytest.mark.parametrize(
+    ("relative", "expected"),
+    [
+        (
+            "lean-workspace/Strategies/WalkForwardMovingAverageV1/backtests/"
+            "wf-v1-spy-2021/result.json",
+            "tracked generated LEAN artifact is forbidden",
+        ),
+        ("logs/walk-forward/v1/wf-v1-spy-2021.log", "tracked generated artifact is forbidden"),
+        (
+            "reports/walk-forward/v1/observations/spy-2021.json",
+            "tracked generated artifact is forbidden",
+        ),
+        (
+            "reports/walk-forward/v1/aggregate-record.json",
+            "tracked generated artifact is forbidden",
+        ),
+    ],
+)
+def test_preflight_rejects_tracked_walk_forward_outputs(relative: str, expected: str) -> None:
+    assert _tracked_artifact_findings([relative]) == [f"{expected}: {relative}"]
+
+
+@pytest.mark.parametrize(
     "relative",
     [
         "tests/fixtures/parity/v1/synthetic_weekdays.csv",
@@ -441,6 +506,14 @@ def test_preflight_rejects_force_tracked_operator_linkage_file() -> None:
         "contracts/lean-local-parity/v1/record.schema.json",
         "lean-workspace/Strategies/ParityFixtureV1/main.py",
         "lean-workspace/Strategies/ParityFixtureV1/config.json",
+        "contracts/walk-forward/v1/README.md",
+        "contracts/walk-forward/v1/protocol.json",
+        "contracts/walk-forward/v1/protocol.schema.json",
+        "contracts/walk-forward/v1/observation.schema.json",
+        "contracts/walk-forward/v1/aggregate-record.schema.json",
+        "lean-workspace/Strategies/WalkForwardMovingAverageV1/main.py",
+        "lean-workspace/Strategies/WalkForwardMovingAverageV1/config.json",
+        "lean-workspace/Strategies/WalkForwardMovingAverageV1/README.md",
     ],
 )
 def test_versioned_contract_identity_files_have_lf_policy(relative: str) -> None:
@@ -523,6 +596,8 @@ def test_ci_has_no_lean_cloud_live_login_optimization_or_data_command() -> None:
     )
 
     assert forbidden.search(workflows) is None
+    assert "run_walk_forward_v1.py" not in workflows
+    assert "os: [ubuntu-latest, windows-latest]" in workflows
     assert workflows.count("permissions:\n  contents: read") == 1
     assert workflows.count("persist-credentials: false") == 1
 

@@ -32,10 +32,16 @@ The same incremental engine powers batch backtests and historical paper replay.
 Strategies cannot mutate portfolio state or submit fills. Every order intent
 passes through `trading_bot_lab.risk`.
 
-The active LEAN projects live under `lean-workspace/Strategies/`. The pre-existing
-`lean/` tree is preserved until both migrated projects complete cloud backtests
-and the migration checklist is reviewed. See `docs/lean-integration.md` and
-ADR 0007.
+The active LEAN projects live under `lean-workspace/Strategies/`. The dedicated
+`WalkForwardMovingAverageV1` project and `contracts/walk-forward/v1/` bind a
+fixed-parameter rolling evaluation to five calendar-year SPY folds that were
+declared before any fold result was observed. The workflow is not optimization:
+all folds retain the same strategy, risk, cost, account, data, and execution
+settings. Its implementation and offline validation exist, but zero
+walk-forward cloud backtests have been executed and no fold result exists.
+
+The pre-existing `lean/` tree remains preserved. See
+`docs/lean-integration.md` and ADR 0007.
 
 ## Safety defaults
 
@@ -60,6 +66,7 @@ src/trading_bot_lab/observability.py bounded JSON-lines logging
 src/trading_bot_lab/artifacts.py    atomic local artifact writes
 src/trading_bot_lab/provenance.py   path-safe content provenance
 src/trading_bot_lab/cli.py          package CLI
+src/trading_bot_lab/walk_forward/   fixed v1 contract and offline operator
 scripts/                            compatible convenience entry points
 tests/                              unit, integration, regression, and hygiene tests
 data/sample/                        committed synthetic demo data only
@@ -68,6 +75,7 @@ reports/ and logs/                  ignored generated artifacts
 lean-workspace/                     active LEAN cloud project workspace
 lean/                               preserved pre-activation LEAN files
 contracts/parity/                   versioned cross-engine comparison contract
+contracts/walk-forward/v1/          fixed five-fold protocol and evidence schemas
 docs/                               policies, workflows, schemas, and ADRs
 ```
 
@@ -111,9 +119,10 @@ python scripts/preflight_check.py
 
 `make check` runs lint, format-check, tests, and preflight when Make is available.
 
-LEAN setup and the two explicitly scoped cloud commands are documented in
-`docs/windows-lean-setup.md` and `docs/lean-integration.md`. Cloud commands are
-never part of `make check` or CI.
+LEAN setup and the already completed two-project activation history are
+documented in `docs/windows-lean-setup.md` and `docs/lean-integration.md`. The
+walk-forward helper can print a separate five-command future plan, but cannot
+execute it. Cloud commands are never part of `make check` or CI.
 
 ## CLI examples
 
@@ -156,6 +165,31 @@ python scripts\run_historical_paper_replay.py --kill-switch-after-bars 8 `
   --export-risk-events-csv reports\paper-risk-events.csv `
   --log-jsonl logs\paper-session.jsonl
 ```
+
+## Fixed walk-forward v1 operator
+
+The operator defaults to a read-only, network-free plan. `validate` checks the
+versioned protocol, schemas, project source, and public configuration;
+`print-cloud-commands` prints exactly five named commands without running them:
+
+```powershell
+python scripts\run_walk_forward_v1.py
+python scripts\run_walk_forward_v1.py validate
+python scripts\run_walk_forward_v1.py print-cloud-commands
+```
+
+The other local phases process already-existing ignored evidence after a future
+authorized session: `extract` normalizes one raw log, `aggregate` requires all
+five exact fold observations, and `evidence` recomputes and displays the
+aggregate. They do not invoke LEAN or a network. Raw logs and cloud output stay
+ignored; only separately reviewed, sanitized, content-bound evidence may be
+tracked.
+
+Actual execution of the five printed commands requires separate human
+authorization for exactly that bounded set. No authorization exists in this
+implementation phase, and the helper deliberately has no cloud-run phase. No
+data or Object Store operation, broker/exchange connection, paper trade, or
+live trade is part of this workflow.
 
 ## Execution and accounting assumptions
 
@@ -208,13 +242,20 @@ realized/unrealized PnL, post-cost exposure, UTC daily loss, opening-peak
 drawdown, typed risk failures, latched halts, kill-switch transitions,
 costed benchmarks, atomic report schemas, content-bound session identity,
 bounded paper replay, zero-bar lifecycle outcomes, structured logs, CLI
-integration, ignore rules, and repository hygiene.
+integration, ignore rules, repository hygiene, and preservation of the existing
+sixteen-dimension parity evidence.
+
+Walk-forward tests close the five-fold manifest, fixed parameters and dates,
+warmup isolation, trailing-only signals, next-open timing, no-liquidation halt
+behavior, source/configuration hashes, bounded single-observation extraction,
+identity rejection, exact-five aggregation, runtime-drift reporting, atomic
+writes, raw-output ignores, and the print-only command boundary.
 
 CI runs Python 3.11, Ruff, pytest, preflight, LEAN source/config static checks,
-and parity-contract tests on Ubuntu and Windows. It never authenticates to
-QuantConnect or invokes a cloud, data, optimization, or live command. Local
-pytest uses a repository-local ignored temp directory to avoid Windows temp ACL
-problems.
+parity-contract tests, and walk-forward contract/static tests on Ubuntu and
+Windows. It never authenticates to QuantConnect or invokes a cloud, data,
+Object Store, optimization, broker, paper, or live command. Local pytest uses a
+repository-local ignored temp directory to avoid Windows temp ACL problems.
 
 ## Troubleshooting
 
@@ -244,8 +285,12 @@ Additional LEAN and cross-engine limitations are maintained in
 
 ## Roadmap
 
-The next safe milestone is **walk-forward validation using LEAN cloud backtests
-and local parity checks**. Live trading is not a recommended next milestone.
+Fixed walk-forward v1 is implemented and locally testable, with the five folds
+and all parameters frozen before results. Only a later, separate authorization
+may start exactly five bounded LEAN cloud backtests; evidence review then occurs
+offline. There is currently no walk-forward result, profitability or robustness
+conclusion, or paper/live readiness. Live trading is not a recommended next
+milestone.
 
 ## License
 

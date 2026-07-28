@@ -1,0 +1,263 @@
+{
+  "$defs": {
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:trading-bot-lab:walk-forward:v1:protocol",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "aggregate_schema_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "benchmark": {
+      "additionalProperties": false,
+      "properties": {
+        "costs_included": {
+          "const": false
+        },
+        "ending_value": {
+          "const": "last_adjusted_close_in_evaluation_interval"
+        },
+        "methodology": {
+          "const": "adjusted_spy_close_to_close"
+        },
+        "starting_value": {
+          "const": "first_adjusted_close_in_evaluation_interval"
+        }
+      },
+      "required": [
+        "costs_included",
+        "ending_value",
+        "methodology",
+        "starting_value"
+      ],
+      "type": "object"
+    },
+    "capital": {
+      "const": {
+        "initial_cash_usd": "100000"
+      },
+      "type": "object"
+    },
+    "costs": {
+      "const": {
+        "fee_bps": "1.0",
+        "minimum_fee_usd": "1.0",
+        "slippage_bps": "2.0"
+      },
+      "type": "object"
+    },
+    "data": {
+      "const": {
+        "data_normalization": "adjusted",
+        "resolution": "daily",
+        "symbol": "SPY"
+      },
+      "type": "object"
+    },
+    "execution": {
+      "const": {
+        "fill_forward": false,
+        "final_signal_expires_without_next_open": true,
+        "first_eligible_signal": "completed_trailing_history_only",
+        "orders_during_warmup": false,
+        "signal_time": "completed_daily_close",
+        "timing": "next_market_open"
+      },
+      "type": "object"
+    },
+    "folds": {
+      "const": [
+        {
+          "evaluation_end": "2021-12-31",
+          "evaluation_start": "2021-01-01",
+          "fold_id": "spy-2021"
+        },
+        {
+          "evaluation_end": "2022-12-31",
+          "evaluation_start": "2022-01-01",
+          "fold_id": "spy-2022"
+        },
+        {
+          "evaluation_end": "2023-12-31",
+          "evaluation_start": "2023-01-01",
+          "fold_id": "spy-2023"
+        },
+        {
+          "evaluation_end": "2024-12-31",
+          "evaluation_start": "2024-01-01",
+          "fold_id": "spy-2024"
+        },
+        {
+          "evaluation_end": "2025-12-31",
+          "evaluation_start": "2025-01-01",
+          "fold_id": "spy-2025"
+        }
+      ],
+      "type": "array"
+    },
+    "observation_schema_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "permitted_result_fields": {
+      "const": [
+        "benchmark_ending_value",
+        "benchmark_return",
+        "benchmark_starting_value",
+        "ending_equity_usd",
+        "estimated_slippage_usd",
+        "excess_return",
+        "fill_count",
+        "maximum_drawdown",
+        "order_count",
+        "rejected_order_count",
+        "starting_equity_usd",
+        "total_fees_usd",
+        "total_return"
+      ],
+      "type": "array"
+    },
+    "prohibited_identity_fields": {
+      "const": [
+        "account_email",
+        "account_id",
+        "backtest_id",
+        "billing_data",
+        "cloud_id",
+        "credentials",
+        "email",
+        "invitation_url",
+        "license",
+        "machine_path",
+        "organization_id",
+        "owner",
+        "project_id",
+        "raw_engine_logs",
+        "raw_order_ids",
+        "secret",
+        "subscription",
+        "token",
+        "url"
+      ],
+      "type": "array"
+    },
+    "project": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm_name": {
+          "const": "WalkForwardMovingAverageV1"
+        },
+        "project_name": {
+          "const": "Strategies/WalkForwardMovingAverageV1"
+        },
+        "public_configuration_hash_method": {
+          "const": "sha256_exact_utf8_lf_bytes"
+        },
+        "public_configuration_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_hash_method": {
+          "const": "sha256_utf8_lf_with_source_identity_slot_zeroed"
+        },
+        "source_identity_slot": {
+          "const": "PROJECT_SOURCE_SHA256"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "algorithm_name",
+        "project_name",
+        "public_configuration_hash_method",
+        "public_configuration_sha256",
+        "source_hash_method",
+        "source_identity_slot",
+        "source_sha256"
+      ],
+      "type": "object"
+    },
+    "protocol_name": {
+      "const": "fixed_parameter_rolling_walk_forward"
+    },
+    "protocol_schema_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "protocol_version": {
+      "const": "1.0.0"
+    },
+    "required_engine_provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "max_observation_payload_bytes": {
+          "const": 16384
+        },
+        "name": {
+          "const": "quantconnect_lean"
+        },
+        "observation_prefix": {
+          "const": "TRADING_BOT_LAB_LEAN_WALK_FORWARD_V1:"
+        },
+        "version_pattern": {
+          "const": "^[0-9]{1,9}(?:\\.[0-9]{1,9}){1,5}$"
+        }
+      },
+      "required": [
+        "max_observation_payload_bytes",
+        "name",
+        "observation_prefix",
+        "version_pattern"
+      ],
+      "type": "object"
+    },
+    "risk": {
+      "const": {
+        "account_type": "cash",
+        "automatic_liquidation": false,
+        "leverage": "1",
+        "long_only": true,
+        "max_daily_loss": "0.02",
+        "max_drawdown": "0.05",
+        "max_gross_exposure": "0.30",
+        "max_position_weight": "0.10"
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "strategy": {
+      "const": {
+        "fast_period": 20,
+        "slow_period": 50,
+        "target_weight": "0.10",
+        "warmup_bars": 50
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "aggregate_schema_sha256",
+    "benchmark",
+    "capital",
+    "costs",
+    "data",
+    "execution",
+    "folds",
+    "observation_schema_sha256",
+    "permitted_result_fields",
+    "prohibited_identity_fields",
+    "project",
+    "protocol_name",
+    "protocol_schema_sha256",
+    "protocol_version",
+    "required_engine_provenance",
+    "risk",
+    "schema_version",
+    "strategy"
+  ],
+  "type": "object"
+}

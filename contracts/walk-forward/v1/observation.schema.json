@@ -1,0 +1,430 @@
+{
+  "$defs": {
+    "canonicalDecimal": {
+      "pattern": "^(?:0|-?[1-9][0-9]*(?:\\.[0-9]*[1-9])?|-?0\\.[0-9]*[1-9])$",
+      "type": "string"
+    },
+    "nonNegativeDecimal": {
+      "pattern": "^(?:0|[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$",
+      "type": "string"
+    },
+    "positiveDecimal": {
+      "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "timestamp": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": "string"
+    },
+    "unitIntervalDecimal": {
+      "pattern": "^(?:0|1|0\\.[0-9]*[1-9])$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:trading-bot-lab:walk-forward:v1:observation",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "fold_id": {
+            "const": "spy-2021"
+          }
+        },
+        "required": [
+          "fold_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evaluation_end": {
+            "const": "2021-12-31"
+          },
+          "evaluation_start": {
+            "const": "2021-01-01"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "fold_id": {
+            "const": "spy-2022"
+          }
+        },
+        "required": [
+          "fold_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evaluation_end": {
+            "const": "2022-12-31"
+          },
+          "evaluation_start": {
+            "const": "2022-01-01"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "fold_id": {
+            "const": "spy-2023"
+          }
+        },
+        "required": [
+          "fold_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evaluation_end": {
+            "const": "2023-12-31"
+          },
+          "evaluation_start": {
+            "const": "2023-01-01"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "fold_id": {
+            "const": "spy-2024"
+          }
+        },
+        "required": [
+          "fold_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evaluation_end": {
+            "const": "2024-12-31"
+          },
+          "evaluation_start": {
+            "const": "2024-01-01"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "fold_id": {
+            "const": "spy-2025"
+          }
+        },
+        "required": [
+          "fold_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evaluation_end": {
+            "const": "2025-12-31"
+          },
+          "evaluation_start": {
+            "const": "2025-01-01"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "properties": {
+              "completion_status": {
+                "const": "completed"
+              }
+            },
+            "required": [
+              "completion_status"
+            ]
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "state": {
+            "properties": {
+              "final_evaluation_close_seen": {
+                "const": true
+              }
+            },
+            "required": [
+              "final_evaluation_close_seen"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "costs": {
+      "const": {
+        "fee_bps": "1.0",
+        "minimum_fee_usd": "1.0",
+        "slippage_bps": "2.0"
+      },
+      "type": "object"
+    },
+    "data": {
+      "const": {
+        "data_normalization": "adjusted",
+        "resolution": "daily",
+        "symbol": "SPY"
+      },
+      "type": "object"
+    },
+    "engine": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "quantconnect_lean"
+        },
+        "version": {
+          "pattern": "^[0-9]{1,9}(?:\\.[0-9]{1,9}){1,5}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "evaluation_end": {
+      "format": "date",
+      "type": "string"
+    },
+    "evaluation_start": {
+      "format": "date",
+      "type": "string"
+    },
+    "execution": {
+      "const": {
+        "fill_forward": false,
+        "final_signal_expires_without_next_open": true,
+        "first_eligible_signal": "completed_trailing_history_only",
+        "orders_during_warmup": false,
+        "signal_time": "completed_daily_close",
+        "timing": "next_market_open"
+      },
+      "type": "object"
+    },
+    "fold_id": {
+      "enum": [
+        "spy-2021",
+        "spy-2022",
+        "spy-2023",
+        "spy-2024",
+        "spy-2025"
+      ]
+    },
+    "metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark_ending_value": {
+          "$ref": "#/$defs/positiveDecimal"
+        },
+        "benchmark_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "benchmark_starting_value": {
+          "$ref": "#/$defs/positiveDecimal"
+        },
+        "ending_equity_usd": {
+          "$ref": "#/$defs/positiveDecimal"
+        },
+        "estimated_slippage_usd": {
+          "$ref": "#/$defs/nonNegativeDecimal"
+        },
+        "excess_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "fill_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maximum_drawdown": {
+          "$ref": "#/$defs/unitIntervalDecimal"
+        },
+        "order_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rejected_order_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "starting_equity_usd": {
+          "const": "100000"
+        },
+        "total_fees_usd": {
+          "$ref": "#/$defs/nonNegativeDecimal"
+        },
+        "total_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        }
+      },
+      "required": [
+        "benchmark_ending_value",
+        "benchmark_return",
+        "benchmark_starting_value",
+        "ending_equity_usd",
+        "estimated_slippage_usd",
+        "excess_return",
+        "fill_count",
+        "maximum_drawdown",
+        "order_count",
+        "rejected_order_count",
+        "starting_equity_usd",
+        "total_fees_usd",
+        "total_return"
+      ],
+      "type": "object"
+    },
+    "protocol_version": {
+      "const": "1.0.0"
+    },
+    "risk": {
+      "const": {
+        "account_type": "cash",
+        "automatic_liquidation": false,
+        "leverage": "1",
+        "long_only": true,
+        "max_daily_loss": "0.02",
+        "max_drawdown": "0.05",
+        "max_gross_exposure": "0.30",
+        "max_position_weight": "0.10"
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "project_source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "public_configuration_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "project_source_sha256",
+        "public_configuration_sha256"
+      ],
+      "type": "object"
+    },
+    "state": {
+      "additionalProperties": false,
+      "properties": {
+        "completion_status": {
+          "enum": [
+            "completed",
+            "failed"
+          ]
+        },
+        "final_evaluation_close_seen": {
+          "type": "boolean"
+        },
+        "final_position": {
+          "additionalProperties": false,
+          "properties": {
+            "quantity": {
+              "$ref": "#/$defs/nonNegativeDecimal"
+            },
+            "state": {
+              "enum": [
+                "cash",
+                "long"
+              ]
+            }
+          },
+          "required": [
+            "quantity",
+            "state"
+          ],
+          "type": "object"
+        },
+        "first_eligible_evaluation_timestamp": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "halt_reasons": {
+          "items": {
+            "enum": [
+              "daily_loss",
+              "invalid_equity",
+              "max_drawdown"
+            ]
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "last_processed_evaluation_timestamp": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "risk_halted": {
+          "type": "boolean"
+        },
+        "warmup_completed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "completion_status",
+        "final_evaluation_close_seen",
+        "final_position",
+        "first_eligible_evaluation_timestamp",
+        "halt_reasons",
+        "last_processed_evaluation_timestamp",
+        "risk_halted",
+        "warmup_completed"
+      ],
+      "type": "object"
+    },
+    "strategy": {
+      "const": {
+        "fast_period": 20,
+        "slow_period": 50,
+        "target_weight": "0.10",
+        "warmup_bars": 50
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "costs",
+    "data",
+    "engine",
+    "evaluation_end",
+    "evaluation_start",
+    "execution",
+    "fold_id",
+    "metrics",
+    "protocol_version",
+    "risk",
+    "schema_version",
+    "source",
+    "state",
+    "strategy"
+  ],
+  "type": "object"
+}

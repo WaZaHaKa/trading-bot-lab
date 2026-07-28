@@ -4,6 +4,8 @@ tests/fixtures/parity/v1/*.json text eol=lf
 contracts/parity/v1/*.json text eol=lf
 contracts/lean-cloud-validation/v1/*.json text eol=lf
 contracts/lean-local-parity/v1/*.json text eol=lf
+contracts/walk-forward/v1/*.json text eol=lf
+contracts/walk-forward/v1/*.md text eol=lf
 
 # Cloud-validation source/configuration digests bind exact bytes; keep LF on every OS.
 lean-workspace/Strategies/SkeletonBacktest/main.py text eol=lf
@@ -12,3 +14,11 @@ lean-workspace/Strategies/MovingAverageBaseline/main.py text eol=lf
 lean-workspace/Strategies/MovingAverageBaseline/config.json text eol=lf
 lean-workspace/Strategies/ParityFixtureV1/main.py text eol=lf
 lean-workspace/Strategies/ParityFixtureV1/config.json text eol=lf
+
+# Walk-forward identities and offline tooling must hash identically on every OS.
+lean-workspace/Strategies/WalkForwardMovingAverageV1/*.py text eol=lf
+lean-workspace/Strategies/WalkForwardMovingAverageV1/*.json text eol=lf
+lean-workspace/Strategies/WalkForwardMovingAverageV1/*.md text eol=lf
+src/trading_bot_lab/walk_forward/*.py text eol=lf
+scripts/*walk_forward*.py text eol=lf
+tests/test_walk_forward*.py text eol=lf

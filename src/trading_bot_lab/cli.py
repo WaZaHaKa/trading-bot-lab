@@ -343,6 +343,12 @@ def _paper_replay(args: argparse.Namespace) -> int:
                         time.sleep(replay.replay_speed_seconds)
         except Exception as exc:
             failure = exc
+            if session.status in {
+                PaperSessionStatus.VALIDATED,
+                PaperSessionStatus.RUNNING,
+                PaperSessionStatus.PAUSED,
+            }:
+                session.fail_runtime(exc)
         summary = session.summary()
     finally:
         close_warning = sink.close() if sink is not None else None
@@ -613,7 +619,7 @@ def _is_workspace_pytest_temp(path: Path, root: Path) -> bool:
     if not relative.parts:
         return False
     first = relative.parts[0]
-    return first == ".pytest" or first.startswith((".pytest-", ".pytest_"))
+    return first.startswith((".pytest-", ".pytest_"))
 
 
 def _print_resolved_config(

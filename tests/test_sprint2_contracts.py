@@ -852,11 +852,43 @@ def test_cli_rejects_a_report_at_a_reserved_rotation_sidecar(tmp_path: Path) -> 
         )
 
 
-def test_cli_pytest_scratch_exception_requires_a_lowercase_ignored_root() -> None:
+@pytest.mark.parametrize("scratch_root", (".pytest", ".PYTEST-unignored"))
+def test_cli_pytest_scratch_exception_requires_a_lowercase_ignored_root(
+    scratch_root: str,
+) -> None:
     root = Path(__file__).resolve().parents[1]
-    trackable = root / ".PYTEST-unignored" / "report.json"
+    trackable = root / scratch_root / "report.json"
 
     assert main(["backtest", "--export-json", str(trackable)]) == 2
+
+
+def test_paper_cli_runtime_failure_exports_a_terminal_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = tmp_path / "failed-paper.json"
+
+    def fail_sleep(_seconds: float) -> None:
+        raise OSError("synthetic CLI scheduler failure")
+
+    monkeypatch.setattr("trading_bot_lab.cli.time.sleep", fail_sleep)
+
+    assert (
+        main(
+            [
+                "paper-replay",
+                "--speed",
+                "0.01",
+                "--export-manifest",
+                str(manifest),
+            ]
+        )
+        == 2
+    )
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["status"] == payload["final_state"] == "failed"
+    assert payload["bars_processed"] == 1
+    assert payload["failure_reason"] == "replay_runtime_failed:OSError"
 
 
 def test_cli_surfaces_atomic_export_oserror_as_exit_two(

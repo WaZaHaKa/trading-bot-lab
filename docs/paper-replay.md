@@ -56,7 +56,9 @@ Illegal transitions raise `SessionStateError`. Repeated stop of a stopped
 session and repeated kill of a halted session are idempotent. Stop, kill, or a
 first-bar failure can produce a valid zero-bar summary and manifest. Processing
 failure rolls back engine-owned bar state, records a stable failure category,
-and enters terminal `FAILED`.
+and enters terminal `FAILED`. A replay scheduler/runtime failure preserves all
+previously committed bars, expires the pending signal, records only the stable
+`replay_runtime_failed:<ExceptionType>` category, and also enters `FAILED`.
 
 ## Commands
 

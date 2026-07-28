@@ -29,7 +29,11 @@ from trading_bot_lab.domain import (
     WarningCode,
 )
 from trading_bot_lab.observability import StructuredEventSink
-from trading_bot_lab.paper import HistoricalReplaySession, export_paper_session_json
+from trading_bot_lab.paper import (
+    HistoricalReplaySession,
+    PaperReplayConfig,
+    export_paper_session_json,
+)
 from trading_bot_lab.risk import RiskPolicy
 
 
@@ -367,10 +371,53 @@ def test_paper_bar_failure_rolls_back_engine_state_and_is_terminal() -> None:
     assert not any(event["event"] == "fill_created" for event in events)
     assert strategy.calls == 2
     assert summary.transitions[-1].to_status is PaperSessionStatus.FAILED
+    assert (
+        sum(transition.to_status is PaperSessionStatus.FAILED for transition in summary.transitions)
+        == 1
+    )
     assert summary.transitions[-1].timestamp == make_bars([100, 100])[1].timestamp
     with pytest.raises(RuntimeError, match="must be running"):
         session.step()
     assert strategy.calls == 2
+
+
+def test_replay_scheduler_failure_is_terminal_and_preserves_committed_state(
+    tmp_path: Path,
+) -> None:
+    events: list[dict[str, object]] = []
+
+    def fail_sleep(_seconds: float) -> None:
+        raise OSError("synthetic scheduler failure")
+
+    session = HistoricalReplaySession(
+        make_bars([100, 101, 102]),
+        strategy=NoTradeStrategy(),
+        policy=policy(),
+        backtest_config=config(),
+        replay_config=PaperReplayConfig(0.25),
+        event_sink=events.append,
+        sleeper=fail_sleep,
+    )
+
+    with pytest.raises(OSError, match="synthetic scheduler failure"):
+        session.run_to_completion()
+
+    summary = session.summary()
+    assert summary.status is PaperSessionStatus.FAILED
+    assert summary.bars_processed == 1
+    assert summary.result is not None
+    assert len(summary.result.equity_curve) == 1
+    assert summary.failure_reason == "replay_runtime_failed:OSError"
+    assert [event["event"] for event in events[-2:]] == [
+        "pending_signal_expired",
+        "session_failed",
+    ]
+    payload = json.loads(
+        export_paper_session_json(summary, tmp_path / "failed.json").read_text(encoding="utf-8")
+    )
+    assert payload["final_state"] == "failed"
+    assert payload["status"] == "failed"
+    assert payload["failure_reason"] == "replay_runtime_failed:OSError"
 
 
 def test_structured_event_sink_io_failure_becomes_one_simulation_warning(

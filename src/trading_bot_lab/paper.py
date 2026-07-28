@@ -224,18 +224,47 @@ class HistoricalReplaySession:
     def run_to_completion(self) -> PaperSessionSummary:
         """Run from validated or paused state until completion or halt."""
 
-        if self._status is PaperSessionStatus.VALIDATED:
-            self.start()
-        elif self._status is PaperSessionStatus.PAUSED:
-            self.resume()
-        while self._status is PaperSessionStatus.RUNNING:
-            self.step()
-            if (
-                self._status is PaperSessionStatus.RUNNING
-                and self._replay_config.replay_speed_seconds > 0
-            ):
-                self._sleeper(self._replay_config.replay_speed_seconds)
+        try:
+            if self._status is PaperSessionStatus.VALIDATED:
+                self.start()
+            elif self._status is PaperSessionStatus.PAUSED:
+                self.resume()
+            while self._status is PaperSessionStatus.RUNNING:
+                self.step()
+                if (
+                    self._status is PaperSessionStatus.RUNNING
+                    and self._replay_config.replay_speed_seconds > 0
+                ):
+                    self._sleeper(self._replay_config.replay_speed_seconds)
+        except Exception as exc:
+            if self._status in {
+                PaperSessionStatus.VALIDATED,
+                PaperSessionStatus.RUNNING,
+                PaperSessionStatus.PAUSED,
+            }:
+                self.fail_runtime(exc)
+            raise
         return self.summary()
+
+    def fail_runtime(self, error: Exception) -> None:
+        """Terminalize a non-bar replay failure without changing committed bar state."""
+
+        if self._status is PaperSessionStatus.FAILED:
+            return
+        if self._status not in {
+            PaperSessionStatus.VALIDATED,
+            PaperSessionStatus.RUNNING,
+            PaperSessionStatus.PAUSED,
+        }:
+            raise SessionStateError(
+                f"cannot fail a {self._status.value} paper session during replay runtime"
+            )
+        self._failure_reason = f"replay_runtime_failed:{type(error).__name__}"
+        self._engine.expire_pending_signal(
+            self._transition_timestamp(),
+            "replay runtime failure",
+        )
+        self._transition(PaperSessionStatus.FAILED, self._failure_reason)
 
     def summary(self) -> PaperSessionSummary:
         result = self._engine.finish() if self._cursor > 0 else None

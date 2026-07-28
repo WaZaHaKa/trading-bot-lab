@@ -33,6 +33,22 @@ comparator must not silently invent a fill. Any other open order is canceled at
 algorithm end; no end-of-backtest liquidation is created merely to close the
 ledger.
 
+## Current validation boundary
+
+Source inspection and the successful 2026-07-28 cloud runs establish that the
+public next-open implementation compiled, initialized, and completed under
+LEAN. The cloud run used QuantConnect SPY data, whereas the local oracle parity
+trace uses the committed synthetic fixture. Headline order, fee, drawdown, and
+equity observations cannot prove per-event execution timing.
+
+Execution-timing parity therefore remains
+`pending_identical_data_execution`. It can change only after an actual LEAN
+`lean_engine_observation` trace over the identical fixture passes the
+content-bound comparator. The sanitized cloud-validation record cannot promote
+this status by assertion. Its typed normalizer also requires project timestamps
+to use canonical UTC seconds on the record's execution date, but that evidence
+hygiene check does not establish event-level execution parity.
+
 ## Expected differences
 
 | Area | Local oracle | LEAN cloud |

@@ -17,5 +17,5 @@
     "max-daily-loss": "0.02",
     "max-drawdown": "0.05"
   },
-  "description": "Backtest-only long-only SPY daily 20/50 moving-average parity baseline with next-open execution; live mode forbidden."
+  "description": "Backtest-only long-only SPY daily 20/50 moving-average parity baseline with next-open execution. live mode forbidden."
 }

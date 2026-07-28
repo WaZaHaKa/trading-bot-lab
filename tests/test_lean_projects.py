@@ -15,11 +15,6 @@ SKELETON = WORKSPACE / "Strategies" / "SkeletonBacktest"
 BASELINE = WORKSPACE / "Strategies" / "MovingAverageBaseline"
 PROJECTS = (SKELETON, BASELINE)
 
-ALLOWED_METADATA_KEYS = {
-    "cloud-id",
-    "local-id",
-    "organization-id",
-}
 FORBIDDEN_CONFIG_KEYS = {
     "access-token",
     "api-token",
@@ -89,12 +84,8 @@ def _normalized_json_keys(value: object) -> set[str]:
 
 def _assert_public_safe_project_config(config: dict[str, object]) -> None:
     required_keys = {"algorithm-language", "parameters", "description"}
-    assert required_keys.issubset(config)
-    assert set(config).issubset(required_keys | ALLOWED_METADATA_KEYS)
+    assert set(config) == required_keys
     assert FORBIDDEN_CONFIG_KEYS.isdisjoint(_normalized_json_keys(config))
-    for key in ALLOWED_METADATA_KEYS & config.keys():
-        value = config[key]
-        assert value is None or (not isinstance(value, bool) and isinstance(value, (int, str)))
 
 
 def _load_with_algorithm_stubs(monkeypatch: pytest.MonkeyPatch, path: Path) -> ModuleType:
@@ -154,20 +145,21 @@ def test_project_sources_parse_and_configs_are_public_safe(project: Path) -> Non
     assert "def OnData(" not in source
 
 
-def test_project_metadata_ids_are_optional_but_runtime_configuration_is_forbidden() -> None:
+def test_project_metadata_ids_and_runtime_configuration_are_forbidden() -> None:
     base: dict[str, object] = {
         "algorithm-language": "Python",
         "parameters": {"start-date": "2023-01-01"},
         "description": "Backtest-only example.",
     }
-    for key, value in (
-        ("organization-id", "metadata-only"),
-        ("cloud-id", 123),
-        ("local-id", None),
+    for forbidden_key in (
+        "organization-id",
+        "cloud-id",
+        "local-id",
+        "api-token",
+        "live-mode",
+        "brokerage",
+        "data-provider",
     ):
-        _assert_public_safe_project_config({**base, key: value})
-
-    for forbidden_key in ("api-token", "live-mode", "brokerage", "data-provider"):
         with pytest.raises(AssertionError):
             _assert_public_safe_project_config({**base, forbidden_key: "forbidden"})
 

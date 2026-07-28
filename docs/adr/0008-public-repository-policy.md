@@ -21,8 +21,10 @@ treated as public information.
 - Numeric organization, project, local, cloud, and backtest identifiers are
   metadata rather than authentication secrets, but they are reviewed before
   publication and are never accepted as proof of authorization.
-- A credential-free `lean-workspace/lean.json` may be tracked. The preflight
-  scanner rejects secret-bearing keys or values without printing them.
+- `lean-workspace/lean.json` is ignored operator-local linkage state and must
+  never be force-added. The preflight scanner rejects tracked linkage files and
+  scans staged project JSON for secret-bearing keys or values without printing
+  those values.
 - No open-source license has been selected. Public visibility does not by
   itself grant permission to copy, modify, or redistribute the code.
 

@@ -1,0 +1,111 @@
+{
+  "engine": {
+    "name": "QuantConnect LEAN",
+    "version": "2.5.0.0.17942"
+  },
+  "execution_date_utc": "2026-07-28",
+  "interpretation": "validation_observations_only_not_strategy_quality",
+  "parity_evidence": {
+    "comparison_matched": null,
+    "contract_name": "trading_bot_lab_cross_engine_parity",
+    "contract_version": "1.0.0",
+    "data_scope": "quantconnect_spy_cloud_data",
+    "identical_fixture_executed": false,
+    "normalized_trace_provenance": null,
+    "trace_schema_version": "1.0.0"
+  },
+  "projects": [
+    {
+      "algorithm_name": "MovingAverageBaseline",
+      "evidence_sha256": {
+        "public_configuration_sha256": "14cf812e248fde5df504438ed775dfbccb3e979504144cf1b0e4def22b0f68e3",
+        "push_log_sha256": "9119062a20ec6d955d23d2b4fae43d04706826e987d3ac7c659664288a7fc612",
+        "source_sha256": "d30d89107580a65b5eccebd0baa6d3f135e4b49cf3b456c6d2954dda9e660df7",
+        "validation_log_sha256": "40ff843bf3b0f0df44311a070ec36ec1673c1a19febab7ae30c61429def8b8e1"
+      },
+      "execution_timestamp_utc": "2026-07-28T04:05:05Z",
+      "lifecycle": {
+        "backtest_completion": "passed",
+        "compilation": "passed",
+        "initialization": "passed",
+        "live_deployment": "absent",
+        "project_synchronization": "passed",
+        "source_configuration": "passed"
+      },
+      "metrics": {
+        "ending_equity_usd": "102118.2",
+        "ending_holdings_value_usd": "10067.72",
+        "maximum_drawdown_ratio": "0.013",
+        "order_count": 40,
+        "simulated_fees_usd": "40",
+        "starting_equity_usd": "100000"
+      },
+      "parameters": {
+        "end-date": "2021-01-01",
+        "fast-period": "20",
+        "fee-bps": "1.0",
+        "initial-cash": "100000",
+        "max-daily-loss": "0.02",
+        "max-drawdown": "0.05",
+        "max-position-weight": "0.10",
+        "max-total-exposure": "0.30",
+        "minimum-fee": "1.0",
+        "slippage-bps": "2.0",
+        "slow-period": "50",
+        "start-date": "2020-01-01",
+        "symbol": "SPY",
+        "target-weight": "0.10",
+        "warmup-bars": "50"
+      },
+      "project_name": "Strategies/MovingAverageBaseline",
+      "warning_categories": [
+        "discouraged_exception_handling"
+      ]
+    },
+    {
+      "algorithm_name": "SkeletonBacktest",
+      "evidence_sha256": {
+        "public_configuration_sha256": "31390c8b8040c8587b730bc31efabeb9f7c2fb5bd2ef4d1e5dd944178a76ba38",
+        "push_log_sha256": "409ca4aec9b277df5e712edede431cb98db3d998c5d6debccd97c1aff3ff8931",
+        "source_sha256": "d02b816f2d9e417a411f344f033aadb366f73d9c2ecc5c398cbd29d5d087db3e",
+        "validation_log_sha256": "d8d1bb2ac4cb562a562100cc734bf878dddf68734e496af291711fc270a5575c"
+      },
+      "execution_timestamp_utc": "2026-07-28T04:04:40Z",
+      "lifecycle": {
+        "backtest_completion": "passed",
+        "compilation": "passed",
+        "initialization": "passed",
+        "live_deployment": "absent",
+        "project_synchronization": "passed",
+        "source_configuration": "passed"
+      },
+      "metrics": {
+        "ending_equity_usd": "100000",
+        "ending_holdings_value_usd": "0",
+        "maximum_drawdown_ratio": "0",
+        "order_count": 0,
+        "simulated_fees_usd": "0",
+        "starting_equity_usd": "100000"
+      },
+      "parameters": {
+        "end-date": "2023-03-31",
+        "initial-cash": "100000",
+        "maximum-allocation": "0.05",
+        "start-date": "2023-01-01"
+      },
+      "project_name": "Strategies/SkeletonBacktest",
+      "warning_categories": [
+        "discouraged_exception_handling"
+      ]
+    }
+  ],
+  "record_type": "lean_cloud_validation",
+  "schema_version": "1.0.0",
+  "validation": {
+    "cloud_engine_validation": "passed",
+    "execution_timing_parity": "pending_identical_data_execution",
+    "numerical_accounting_parity": "pending_identical_data_execution",
+    "project_synchronization_validation": "passed",
+    "source_configuration_validation": "passed"
+  }
+}

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 REQUIRED_FILES = [
@@ -50,14 +50,18 @@ REQUIRED_FILES = [
     "tests/test_lean_projects.py",
     "tests/test_lean_parity_data.py",
     "tests/test_cross_engine_parity.py",
+    "tests/test_lean_cloud_validation.py",
     "contracts/parity/v1/README.md",
     "contracts/parity/v1/contract.json",
     "contracts/parity/v1/scenario.schema.json",
     "contracts/parity/v1/trace.schema.json",
+    "contracts/lean-cloud-validation/v1/2026-07-28.json",
+    "contracts/lean-cloud-validation/v1/record.schema.json",
     "src/trading_bot_lab/parity/__init__.py",
     "src/trading_bot_lab/parity/contract.py",
     "src/trading_bot_lab/parity/local.py",
     "src/trading_bot_lab/parity/compare.py",
+    "src/trading_bot_lab/lean_validation.py",
     "data/local/.gitkeep",
     "data/sample/README.md",
     "data/sample/synthetic_spy_daily.csv",
@@ -264,6 +268,7 @@ EXPECTED_IGNORED_PATHS = (
     "lean.json",
     "config.json",
     ".lean/credentials",
+    "lean-workspace/lean.json",
     "_lean_init_tmp/lean.json",
     "lean-workspace/data/market-hours/market-hours-database.json",
     "lean-workspace/storage/Object Store/state.json",
@@ -280,7 +285,6 @@ EXPECTED_IGNORED_PATHS = (
 
 EXPECTED_TRACKABLE_PATHS = (
     "lean-workspace/README.md",
-    "lean-workspace/lean.json",
     "lean-workspace/Strategies/SkeletonBacktest/main.py",
     "lean-workspace/Strategies/SkeletonBacktest/config.json",
     "lean-workspace/Strategies/SkeletonBacktest/README.md",
@@ -316,6 +320,25 @@ def _git_paths(root: Path, *args: str) -> tuple[list[str], str | None]:
     if completed.returncode != 0:
         return [], "git inventory could not be completed"
     return [item for item in completed.stdout.split("\0") if item], None
+
+
+def _git_index_text(root: Path, relative: str) -> tuple[str | None, str | None]:
+    normalized = relative.replace("\\", "/")
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "blob", f":{normalized}"],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None, f"{normalized} staged content could not be inspected"
+    if completed.returncode != 0:
+        return None, f"{normalized} staged content could not be inspected"
+    try:
+        return completed.stdout.decode("utf-8"), None
+    except UnicodeDecodeError:
+        return None, f"{normalized} staged content is not UTF-8 text"
 
 
 def _check_ignore(root: Path, relative: str) -> tuple[bool, str | None]:
@@ -392,6 +415,18 @@ def _walk_sensitive_json(value: Any, *, prefix: str = "") -> list[str]:
     return findings
 
 
+def _normalized_json_keys(value: Any) -> set[str]:
+    keys: set[str] = set()
+    if isinstance(value, dict):
+        for raw_key, child in value.items():
+            keys.add(_normalize_key(raw_key))
+            keys.update(_normalized_json_keys(child))
+    elif isinstance(value, list):
+        for child in value:
+            keys.update(_normalized_json_keys(child))
+    return keys
+
+
 def _lean_workspace_findings(root: Path) -> list[str]:
     findings: list[str] = []
     if (root / ".lean").exists():
@@ -418,6 +453,8 @@ def _lean_workspace_findings(root: Path) -> list[str]:
             continue
         relative_parts = path.relative_to(workspace).parts
         relative = path.relative_to(root).as_posix()
+        if relative == "lean-workspace/lean.json":
+            continue
         lowered_name = path.name.lower().replace("_", "-")
         if any(part.lower() == ".lean" for part in relative_parts):
             findings.append(f"{relative} is repository-local LEAN credential state")
@@ -449,6 +486,35 @@ def _lean_workspace_findings(root: Path) -> list[str]:
     return findings
 
 
+def _tracked_lean_metadata_findings(root: Path, tracked: list[str]) -> list[str]:
+    findings: list[str] = []
+    for relative in tracked:
+        normalized = relative.replace("\\", "/")
+        git_path = PurePosixPath(normalized)
+        if git_path.parts[:1] != ("lean-workspace",) or git_path.suffix.lower() != ".json":
+            continue
+        text, error = _git_index_text(root, normalized)
+        if error is not None:
+            findings.append(error)
+            continue
+        assert text is not None
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            findings.append(f"{normalized} staged content is invalid JSON")
+            continue
+        for key in _walk_sensitive_json(payload):
+            findings.append(f"{normalized} staged content contains non-empty sensitive key: {key}")
+        forbidden = sorted(LEAN_METADATA_KEYS.intersection(_normalized_json_keys(payload)))
+        for key in forbidden:
+            findings.append(f"{normalized} contains private local cloud-linkage metadata: {key}")
+        if PRIVATE_KEY_HEADER.search(text):
+            findings.append(f"{normalized} staged content contains a private-key header")
+        if any(pattern.search(text) for pattern in TOKEN_SIGNATURES):
+            findings.append(f"{normalized} staged content contains a likely credential signature")
+    return findings
+
+
 def _tracked_artifact_findings(tracked: list[str]) -> list[str]:
     findings: list[str] = []
     for tracked_path in tracked:
@@ -459,6 +525,10 @@ def _tracked_artifact_findings(tracked: list[str]) -> list[str]:
 
         if normalized in {"lean.json", "config.json"}:
             findings.append(f"tracked root LEAN configuration is forbidden: {normalized}")
+        if normalized.lower() == "lean-workspace/lean.json":
+            findings.append(
+                "tracked operator-local LEAN linkage is forbidden: lean-workspace/lean.json"
+            )
         if ".lean" in lowered_parts or normalized.startswith("_lean_init_tmp/"):
             findings.append(f"tracked LEAN credential/bootstrap state is forbidden: {normalized}")
         if normalized.startswith("lean-workspace/") and any(
@@ -545,6 +615,7 @@ def main() -> int:
         findings.extend(_scan_text(relative.replace("\\", "/"), text))
 
     findings.extend(_lean_workspace_findings(root))
+    findings.extend(_tracked_lean_metadata_findings(root, tracked))
     findings.extend(_tracked_artifact_findings(tracked))
     findings.extend(_ignore_rule_findings(root))
 

@@ -6,5 +6,5 @@
     "initial-cash": "100000",
     "maximum-allocation": "0.05"
   },
-  "description": "Backtest-only SPY daily no-order cloud subscription smoke test; live mode forbidden."
+  "description": "Backtest-only SPY daily no-order cloud subscription smoke test. live mode forbidden."
 }

@@ -118,10 +118,12 @@ the committed fixture hash before any signal or trading logic can run.
 
 ## Observation boundary
 
-One completed LEAN run emits exactly one bounded machine-readable line beginning
-with `TRADING_BOT_LAB_LEAN_PARITY_V1:`. The suffix is compact canonical JSON for
-a v1 `lean_engine_observation`; ordinary human-readable log lines are never
-parsed as parity evidence. The strict extractor rejects missing or duplicate
+One completed LEAN run emits exactly one bounded machine-readable message beginning
+with `TRADING_BOT_LAB_LEAN_PARITY_V1:`. LEAN may wrap that message across physical
+log lines; the extractor rejoins only the single size-bounded root JSON object after
+the exact prefix. The payload is compact canonical JSON for a v1
+`lean_engine_observation`; ordinary human-readable log lines are never parsed as
+parity evidence. The strict extractor rejects missing or duplicate
 prefixed records, duplicate JSON keys, non-finite or non-canonical numbers,
 wrong versions or hashes, extra fields, machine paths, URLs, account metadata,
 and credentials. Stable serialization uses a final newline and contains no
@@ -186,10 +188,22 @@ reviewed manual process, then select both Object Store parameters. Repository
 scripts never upload it. Missing content or a wrong hash fails closed. Do not
 add `--download-data`, a historical provider, optimization, or remote URL.
 
-This sprint prepares and tests the workflow only. No local LEAN run, cloud run,
-Object Store operation, or `lean_engine_observation` has been produced. The
-comparator's labelled test candidate remains test data, not parity evidence;
-the successful SPY cloud runs do not change that boundary.
+## 2026-07-28 genuine local comparison
+
+The pinned `linux/amd64` runtime processed the exact local fixture and produced one
+validated `lean_engine_observation`. The tracked sanitized result is
+`contracts/lean-local-parity/v1/2026-07-28.json`; raw logs, traces, audits, and
+engine results remain ignored and are represented only by SHA-256 digests.
+
+Fifteen comparison dimensions passed, including fixture identity, signal/intent/fill
+timing, direction/count, position, fees, slippage, cash, PnL, equity, exposure,
+drawdown, and final-bar behavior. `rejection_and_halt_state` failed because the
+LEAN exit-decision snapshot valued the current row at its close while the local
+oracle used the eligible next-bar open. Both engines approved the risk-reducing
+exit, but `daily_loss_pct`, `drawdown_pct`, and `order_weight` exceeded the fixed
+ratio tolerance. Execution-timing parity is therefore `passed`; numerical
+accounting/risk parity and the overall genuine-local result are `failed`. No
+profitability or strategy-quality claim follows from this validation run.
 
 ## Failure rule
 

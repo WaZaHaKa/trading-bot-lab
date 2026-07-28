@@ -1,8 +1,8 @@
 # LEAN integration guide
 
 Status: **LEAN cloud engine validation completed for both SPY research projects;
-the pinned local parity runtime is prepared, identical-data execution remains
-pending, and live trading remains prohibited.**
+the pinned local identical-data run completed, but overall parity failed on the
+exit risk-metric snapshot; live trading remains prohibited.**
 
 LEAN is the primary cross-asset research engine. The local Python CSV engine
 remains an independent deterministic oracle and must not be deleted or changed
@@ -78,8 +78,9 @@ upload or download, network fallback, external market data, or optimization.
 
 All three projects raise immediately if LEAN reports live mode. None contains a
 secret, live configuration, model, data-download path, or broker/exchange
-integration. Only the two SPY projects have completed a LEAN run;
-`ParityFixtureV1` has not.
+integration. The two SPY projects completed cloud runs; `ParityFixtureV1` completed
+a network-isolated local run over the committed synthetic fixture and has not been
+pushed or executed in the cloud.
 
 ## Canonical cloud validation
 
@@ -240,10 +241,11 @@ Ignored state permits one pull and at most five executions, rejects parallel
 runs, and cleanup requires a current-run sentinel. Windows can validate the
 contract but intentionally refuses Linux Docker execution.
 
-LEAN must emit exactly one bounded line prefixed
-`TRADING_BOT_LAB_LEAN_PARITY_V1:`. The strict extractor accepts only its
-canonical JSON suffix, requires engine name `quantconnect_lean` and a dotted
-numeric runtime version, and rejects malformed or duplicate observations,
+LEAN must emit exactly one bounded message prefixed
+`TRADING_BOT_LAB_LEAN_PARITY_V1:`. The strict extractor rejoins only its single
+size-bounded root JSON object when LEAN wraps the message across physical log
+lines, requires engine name `quantconnect_lean` and a dotted numeric runtime
+version, and rejects malformed or duplicate observations,
 non-finite numbers, paths, URLs, account metadata, cloud IDs, and credentials.
 
 A future, separately approved cloud run requires the operator to place the
@@ -252,10 +254,14 @@ both transport parameters. Repository tooling performs no Object Store write.
 Never use `lean data download`, `--download-data`, a historical data provider,
 optimization, remote URL, or network fallback.
 
-No local or cloud LEAN execution or Object Store operation occurred in this
-implementation sprint. Execution-timing and numerical-accounting parity remain
-`pending_identical_data_execution` until an actual extracted
-`lean_engine_observation` passes every comparison dimension.
+The genuine local run used LEAN `2.5.0.0`, the pinned immutable image, the exact
+local fixture, and the rootless network-isolated runtime. Fifteen of sixteen
+dimensions passed. Execution timing is `passed`; numerical accounting/risk and
+overall parity are `failed` because three exit-decision risk ratios used a
+current-row-close LEAN portfolio snapshot rather than the eligible open snapshot.
+The closed sanitized record is
+`contracts/lean-local-parity/v1/2026-07-28.json`. The five-execution bound is
+exhausted, and no Object Store or cloud parity operation occurred.
 
 See `windows-lean-setup.md`, `qcc-guardrails.md`,
 `execution-timing-comparison.md`, `risk-policy-mapping.md`, and

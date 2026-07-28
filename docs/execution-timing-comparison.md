@@ -48,21 +48,19 @@ sequence can begin.
 
 ## Current validation boundary
 
-The pinned Linux operator validates the exact fixture, immutable LEAN image,
+The pinned Linux operator validated the exact fixture, immutable LEAN image,
 rootless daemon, credential-free CLI config, blocked host HTTP/HTTPS, and
-networkless unprivileged container before an engine run. It serializes at most
-five executions and preserves raw output only under ignored paths. These
-runtime controls do not themselves prove timing parity.
+networkless unprivileged container. A genuine LEAN `2.5.0.0` run then produced a
+valid normalized observation over the same eight rows as the local oracle. No
+Object Store or cloud parity operation occurred.
 
-Source inspection and deterministic synthetic tests establish only that the
-dedicated input, timing, observation, and comparison boundaries are prepared.
-No local or cloud LEAN engine has executed `ParityFixtureV1`, and no Object Store
-operation or valid `lean_engine_observation` exists.
-
-Execution-timing parity remains `pending_identical_data_execution`. It can
-change only after an actual LEAN trace over the exact fixture passes the strict
-content-bound comparator. The sanitized SPY cloud-validation record, a parsed
-test observation, or source inspection cannot promote this status.
+The content-bound comparator passed fixture visibility, trailing signal timing,
+next-row-open intent and fill timing, trade direction/count, and final-signal
+expiry. Execution-timing parity is therefore `passed`. Overall parity remains
+failed: LEAN's exit risk snapshot used the current row close for three risk ratios
+while the local oracle used the eligible row open. That failure is recorded
+separately under `rejection_and_halt_state`; it does not erase the passed timing
+dimensions or permit a full parity claim.
 
 ## Identical-fixture comparison rules
 

@@ -16,8 +16,8 @@
 - The successful cloud runs establish engine, synchronization, and public
   source/configuration validation only. They did not execute the committed
   synthetic parity fixture.
-- Execution-timing and numerical-accounting parity both remain
-  `pending_identical_data_execution`.
+- Genuine local execution-timing parity passed, but numerical accounting/risk
+  parity failed on three exit-decision risk ratios. Overall parity is failed.
 - Daily data cannot enforce or prove intraday daily-loss/stop behavior.
 - Cash-account settlement, exchange calendars, lot sizes, fills, and corporate
   actions differ from the local simulator.
@@ -27,22 +27,22 @@
 - Synthetic parity data checks semantics only and cannot validate market-data
   quality or a strategy edge.
 - A sanitized comparator fixture is not a LEAN engine observation.
-- The committed fixture can be validated and copied byte-for-byte to the
-  ignored LEAN custom-data path, and the dedicated project plus normalized v1
-  observation producer and extractor are implemented. They have not been
-  executed or verified by a LEAN engine.
-- Neither the default local-file transport nor the explicit Object Store
-  transport has processed the fixture in LEAN. No Object Store upload, download,
-  or read was attempted in this implementation sprint.
-- No real `TRADING_BOT_LAB_LEAN_PARITY_V1:` line or
-  `lean_engine_observation` exists. Parser and comparator fixtures prove only
-  deterministic validation behavior, not LEAN timing or accounting.
+- The default local-file transport processed the committed fixture in a genuine
+  network-isolated LEAN `2.5.0.0` run. The explicit Object Store transport remains
+  unexecuted; no Object Store upload, download, or read was attempted.
+- A real ignored `TRADING_BOT_LAB_LEAN_PARITY_V1:` message and validated
+  `lean_engine_observation` now exist. The tracked record contains only sanitized
+  classifications and non-reversible digests, not the raw message or trace.
+- The final comparison passed 15 of 16 dimensions. LEAN valued the exit-decision
+  risk snapshot at the current row close rather than the next-bar open used by
+  the local oracle, so three risk ratios exceeded tolerance even though both
+  engines approved the risk-reducing exit.
 - Observation extraction validates canonical structure, content binding, and
   the claimed engine/provenance state; it is not cryptographic runtime
   attestation. The operator must preserve and review the actual ignored LEAN
   log and invocation context before treating an extracted trace as evidence.
-- The runtime LEAN version remains execution-time evidence and cannot be filled
-  from source inspection or the earlier SPY cloud record.
+- The local parity runtime version is observed as LEAN `2.5.0.0`; it is separate
+  from the earlier cloud-validation engine version.
 - The compiler warning category `discouraged_exception_handling` remains in
   both cloud projects. It was non-fatal for these runs but has not been removed.
 - Project IDs, backtest IDs, URLs, account metadata, and raw cloud output are
@@ -61,6 +61,7 @@
 Cloud and local backtests are hypothetical, place no real orders, are not
 financial advice, and do not predict future results.
 
-The next safe milestone is an actual normalized LEAN trace over the committed
-synthetic fixture followed by the existing content-bound comparison. Any
+The next safe milestone is a separately authorized correction of the LEAN
+exit-risk valuation snapshot, regression validation, and a fresh bounded genuine
+comparison. The current five-execution authorization is exhausted. Any
 walk-forward work remains subsequent and separately reviewed.

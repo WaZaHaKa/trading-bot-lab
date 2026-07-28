@@ -542,3 +542,55 @@ After a clean committed checkpoint, the separately authorized operator phases
 may perform the one pinned image pull and a bounded genuine execution. Raw logs,
 engine output, runtime audits, normalized traces, and comparisons remain ignored
 until a distinct sanitization and review step.
+
+## 2026-07-28 - Genuine local identical-data LEAN comparison
+
+### Hypothesis
+
+No profitability hypothesis was tested. This run evaluated whether the pinned
+local LEAN engine and independent Python oracle agree on the same synthetic
+fixture under the v1 timing, cost, accounting, and risk contract.
+
+### Asset universe and data
+
+One synthetic `PARITY` symbol over the exact eight-row LF fixture, SHA-256
+`a68bcf7fc30d2593b32e5a98852c4f8e0190ed99865640485b344515d9f1f78a`.
+No external market data, Object Store, cloud backtest, broker, or exchange was
+used.
+
+### Signal and execution
+
+Both observations contain one 96-share buy and one 96-share sell at the next
+row open, with the final signal left unfilled. Fixture visibility, signal,
+intent, fill, direction/count, and final-bar dimensions passed.
+
+### Risk and accounting
+
+Position, fee, slippage, cash, PnL, equity, exposure, and drawdown dimensions
+passed within the fixed v1 tolerances. `rejection_and_halt_state` failed: LEAN's
+exit-decision portfolio snapshot valued the current row close, while the local
+oracle used the eligible next-bar open. The resulting `daily_loss_pct`,
+`drawdown_pct`, and `order_weight` ratios exceeded tolerance. Both engines still
+approved the risk-reducing long exit; no risk limit was bypassed or weakened.
+
+### Validation
+
+The immutable `linux/amd64` image ran through the verified rootless daemon with
+host HTTP/HTTPS blocked and the container configured with no network, privilege,
+credentials, Docker socket, or unrelated mount. Five bounded execution attempts
+were consumed. The sanitized closed-schema record is
+`contracts/lean-local-parity/v1/2026-07-28.json`; raw logs and traces remain
+ignored.
+
+### Decision
+
+`genuine_local_lean_parity_failed`. Keep the pull request draft. Execution timing
+is validated for this fixture, but overall numerical/risk parity is not
+established. This is research infrastructure evidence, not a profitability,
+paper-trading, or live-trading approval.
+
+### Notes
+
+A future retry requires separate authorization and must first correct and test
+the LEAN exit-risk valuation snapshot without changing the v1 expected values or
+tolerances.

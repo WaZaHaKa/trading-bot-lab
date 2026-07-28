@@ -1,0 +1,107 @@
+{
+  "classifications": {
+    "execution_timing_parity": "passed",
+    "numerical_accounting_parity": "failed",
+    "overall_status": "genuine_local_lean_parity_failed"
+  },
+  "comparison": {
+    "bars_compared": 8,
+    "dimensions": {
+      "bar_visibility": "passed",
+      "cash": "passed",
+      "drawdown": "passed",
+      "equity": "passed",
+      "exposure": "passed",
+      "fees": "passed",
+      "fill_timing": "passed",
+      "final_bar_behavior": "passed",
+      "fixture_identity": "passed",
+      "intent_timing": "passed",
+      "position_state": "passed",
+      "realized_unrealized_pnl": "passed",
+      "rejection_and_halt_state": "failed",
+      "signal_timing": "passed",
+      "slippage": "passed",
+      "trade_direction_and_count": "passed"
+    },
+    "divergences": [
+      {
+        "cause_category": "current_row_close_risk_snapshot",
+        "dimension": "rejection_and_halt_state",
+        "explanation": "LEAN valued the exit-decision risk snapshot at the current row close while the local oracle used the eligible next-bar open. Both engines approved the risk-reducing long exit, but three ratio metrics exceeded tolerance.",
+        "observations": [
+          {
+            "expected": "0.0009646592598476513",
+            "field": "daily_loss_pct",
+            "observed": "0.001929318515824141845555223141",
+            "tolerance": "0.0000001"
+          },
+          {
+            "expected": "0.005789953996800032",
+            "field": "drawdown_pct",
+            "observed": "0.006749952",
+            "tolerance": "0.0000001"
+          },
+          {
+            "expected": "0.0946089655582672",
+            "field": "order_weight",
+            "observed": "0.09470040720300070904199946235",
+            "tolerance": "0.0000001"
+          }
+        ],
+        "risk_outcome": "approved_risk_reducing_exit_in_both_engines"
+      }
+    ],
+    "fills_compared": 2,
+    "intents_compared": 2,
+    "matched": false,
+    "risk_decisions_compared": 2,
+    "tolerances": {
+      "money": "0.01",
+      "price": "0.00000001",
+      "quantity": "0",
+      "ratio": "0.0000001"
+    }
+  },
+  "evidence_sha256": {
+    "algorithm_source_sha256": "55d012866ca83622e433b6b298bbac9f0f7cf1c7254679c1bd653b7b23d1ac6f",
+    "comparison_sha256": "c29c9059a1ba2e7f94f1a4d7ed4a05041dfe44d9a43ac694ab1cc654855a7b47",
+    "contract_sha256": "81d300e5567ab7f6c3f6b49058542ac229f4597efa248036fe5d2879fc1efe8d",
+    "fixture_sha256": "a68bcf7fc30d2593b32e5a98852c4f8e0190ed99865640485b344515d9f1f78a",
+    "image_record_sha256": "083b1b0cdf9cd84101ed81e0d167ed979535cf5f701c4d26c61f35c91577708d",
+    "lean_trace_sha256": "8d30e68f51087c58880091f1637d5b6f94948e0e12d906ccbd408171d2d7bcfa",
+    "local_trace_sha256": "5c0592f4cff93d6efd835d56ebf33211ce8950c8ecc17c780f107570d7a8bfe4",
+    "normalized_bars_sha256": "02394c31af7b982493bcbdadd92735d7a0ee6ae04e3d38b7e3e3a5fde6cbce6d",
+    "public_configuration_sha256": "e3430686f13145f992c34462f5d441256579250624bf39ed42b35b2057921137",
+    "runtime_audit_sha256": "96b30261e4a59b707d6d28999b7eb656944aacc513ac852a73226002db177e8c",
+    "scenario_manifest_sha256": "8179874de11817c421f7ddcfdb2f1f173308009953a576a954fd8e3f6b58bf4a"
+  },
+  "execution_date_utc": "2026-07-28",
+  "record_type": "lean_local_parity_validation",
+  "runtime": {
+    "container_isolation": "passed",
+    "execution_count": 5,
+    "host_http_https_isolation": "passed",
+    "image_oci_index_digest": "sha256:c03e9acab0ef6bd67cd44b968d10c40c13f4079164b8fe02148de45dbd0c0649",
+    "lean_cli_version": "1.0.227",
+    "lean_engine_version": "2.5.0.0",
+    "platform": "linux/amd64",
+    "platform_manifest_digest": "sha256:6cdc4112fa14ed99eca5c313bc84c8008cc07d6143e25b3f6ddeb01df2501f0e",
+    "pull_count": 1,
+    "rootless_docker_validation": "passed"
+  },
+  "safety": {
+    "broker_or_exchange_connectivity": false,
+    "external_market_data": false,
+    "live_deployment": false,
+    "optimization": false,
+    "system_docker_contacted": false
+  },
+  "scenario": {
+    "contract_version": "1.0.0",
+    "fixture": "synthetic_weekdays.csv",
+    "scenario_id": "weekday_ma_next_open_v1",
+    "schema_version": "1.0.0"
+  },
+  "schema_version": "1.0.0"
+}

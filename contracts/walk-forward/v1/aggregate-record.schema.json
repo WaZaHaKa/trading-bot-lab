@@ -1,0 +1,301 @@
+{
+  "$defs": {
+    "canonicalDecimal": {
+      "pattern": "^(?:0|-?[1-9][0-9]*(?:\\.[0-9]*[1-9])?|-?0\\.[0-9]*[1-9])$",
+      "type": "string"
+    },
+    "nonNegativeDecimal": {
+      "pattern": "^(?:0|[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:trading-bot-lab:walk-forward:v1:aggregate-record",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "contract_status": {
+      "enum": [
+        "walk_forward_contract_complete",
+        "walk_forward_contract_failed",
+        "walk_forward_contract_incomplete"
+      ]
+    },
+    "fold_results": {
+      "items": false,
+      "maxItems": 5,
+      "minItems": 5,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "urn:trading-bot-lab:walk-forward:v1:observation"
+            },
+            {
+              "properties": {
+                "evaluation_end": {
+                  "const": "2021-12-31"
+                },
+                "evaluation_start": {
+                  "const": "2021-01-01"
+                },
+                "fold_id": {
+                  "const": "spy-2021"
+                }
+              },
+              "required": [
+                "evaluation_end",
+                "evaluation_start",
+                "fold_id"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "urn:trading-bot-lab:walk-forward:v1:observation"
+            },
+            {
+              "properties": {
+                "evaluation_end": {
+                  "const": "2022-12-31"
+                },
+                "evaluation_start": {
+                  "const": "2022-01-01"
+                },
+                "fold_id": {
+                  "const": "spy-2022"
+                }
+              },
+              "required": [
+                "evaluation_end",
+                "evaluation_start",
+                "fold_id"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "urn:trading-bot-lab:walk-forward:v1:observation"
+            },
+            {
+              "properties": {
+                "evaluation_end": {
+                  "const": "2023-12-31"
+                },
+                "evaluation_start": {
+                  "const": "2023-01-01"
+                },
+                "fold_id": {
+                  "const": "spy-2023"
+                }
+              },
+              "required": [
+                "evaluation_end",
+                "evaluation_start",
+                "fold_id"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "urn:trading-bot-lab:walk-forward:v1:observation"
+            },
+            {
+              "properties": {
+                "evaluation_end": {
+                  "const": "2024-12-31"
+                },
+                "evaluation_start": {
+                  "const": "2024-01-01"
+                },
+                "fold_id": {
+                  "const": "spy-2024"
+                }
+              },
+              "required": [
+                "evaluation_end",
+                "evaluation_start",
+                "fold_id"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "urn:trading-bot-lab:walk-forward:v1:observation"
+            },
+            {
+              "properties": {
+                "evaluation_end": {
+                  "const": "2025-12-31"
+                },
+                "evaluation_start": {
+                  "const": "2025-01-01"
+                },
+                "fold_id": {
+                  "const": "spy-2025"
+                }
+              },
+              "required": [
+                "evaluation_end",
+                "evaluation_start",
+                "fold_id"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      ],
+      "type": "array"
+    },
+    "identities": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregate_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "observation_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "project_source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "protocol_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "public_configuration_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "aggregate_schema_sha256",
+        "observation_schema_sha256",
+        "protocol_manifest_sha256",
+        "project_source_sha256",
+        "public_configuration_sha256"
+      ],
+      "type": "object"
+    },
+    "protocol_name": {
+      "const": "fixed_parameter_rolling_walk_forward"
+    },
+    "protocol_version": {
+      "const": "1.0.0"
+    },
+    "record_type": {
+      "const": "walk_forward_aggregate"
+    },
+    "runtime_consistency": {
+      "additionalProperties": false,
+      "properties": {
+        "consistent": {
+          "type": "boolean"
+        },
+        "versions": {
+          "items": {
+            "pattern": "^[0-9]{1,9}(?:\\.[0-9]{1,9}){1,5}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "consistent",
+        "versions"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "summary": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark_beating_fold_count": {
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "completed_fold_count": {
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "halt_count": {
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "median_benchmark_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "median_excess_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "median_strategy_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "positive_return_fold_count": {
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total_fees_usd": {
+          "$ref": "#/$defs/nonNegativeDecimal"
+        },
+        "total_orders": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "worst_fold_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "worst_maximum_drawdown": {
+          "$ref": "#/$defs/nonNegativeDecimal"
+        }
+      },
+      "required": [
+        "benchmark_beating_fold_count",
+        "completed_fold_count",
+        "halt_count",
+        "median_benchmark_return",
+        "median_excess_return",
+        "median_strategy_return",
+        "positive_return_fold_count",
+        "total_fees_usd",
+        "total_orders",
+        "worst_fold_return",
+        "worst_maximum_drawdown"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "contract_status",
+    "fold_results",
+    "identities",
+    "protocol_name",
+    "protocol_version",
+    "record_type",
+    "runtime_consistency",
+    "schema_version",
+    "summary"
+  ],
+  "type": "object"
+}

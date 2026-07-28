@@ -1,0 +1,129 @@
+{
+  "aggregate_schema_sha256": "b62167529add3abd85540c91a3e8779dcd338e51f4be23476f98623197d0abef",
+  "benchmark": {
+    "costs_included": false,
+    "ending_value": "last_adjusted_close_in_evaluation_interval",
+    "methodology": "adjusted_spy_close_to_close",
+    "starting_value": "first_adjusted_close_in_evaluation_interval"
+  },
+  "capital": {
+    "initial_cash_usd": "100000"
+  },
+  "costs": {
+    "fee_bps": "1.0",
+    "minimum_fee_usd": "1.0",
+    "slippage_bps": "2.0"
+  },
+  "data": {
+    "data_normalization": "adjusted",
+    "resolution": "daily",
+    "symbol": "SPY"
+  },
+  "execution": {
+    "fill_forward": false,
+    "final_signal_expires_without_next_open": true,
+    "first_eligible_signal": "completed_trailing_history_only",
+    "orders_during_warmup": false,
+    "signal_time": "completed_daily_close",
+    "timing": "next_market_open"
+  },
+  "folds": [
+    {
+      "evaluation_end": "2021-12-31",
+      "evaluation_start": "2021-01-01",
+      "fold_id": "spy-2021"
+    },
+    {
+      "evaluation_end": "2022-12-31",
+      "evaluation_start": "2022-01-01",
+      "fold_id": "spy-2022"
+    },
+    {
+      "evaluation_end": "2023-12-31",
+      "evaluation_start": "2023-01-01",
+      "fold_id": "spy-2023"
+    },
+    {
+      "evaluation_end": "2024-12-31",
+      "evaluation_start": "2024-01-01",
+      "fold_id": "spy-2024"
+    },
+    {
+      "evaluation_end": "2025-12-31",
+      "evaluation_start": "2025-01-01",
+      "fold_id": "spy-2025"
+    }
+  ],
+  "observation_schema_sha256": "3058176c3f5d3349cbc158f3fb32d159eaa736bb252aeff993f80ba8a54ad9aa",
+  "permitted_result_fields": [
+    "benchmark_ending_value",
+    "benchmark_return",
+    "benchmark_starting_value",
+    "ending_equity_usd",
+    "estimated_slippage_usd",
+    "excess_return",
+    "fill_count",
+    "maximum_drawdown",
+    "order_count",
+    "rejected_order_count",
+    "starting_equity_usd",
+    "total_fees_usd",
+    "total_return"
+  ],
+  "prohibited_identity_fields": [
+    "account_email",
+    "account_id",
+    "backtest_id",
+    "billing_data",
+    "cloud_id",
+    "credentials",
+    "email",
+    "invitation_url",
+    "license",
+    "machine_path",
+    "organization_id",
+    "owner",
+    "project_id",
+    "raw_engine_logs",
+    "raw_order_ids",
+    "secret",
+    "subscription",
+    "token",
+    "url"
+  ],
+  "project": {
+    "algorithm_name": "WalkForwardMovingAverageV1",
+    "project_name": "Strategies/WalkForwardMovingAverageV1",
+    "public_configuration_hash_method": "sha256_exact_utf8_lf_bytes",
+    "public_configuration_sha256": "034571b4a1a8406ced12ba2d9ccd8d62449ade3c8d231cdc3b06c036f9089fff",
+    "source_hash_method": "sha256_utf8_lf_with_source_identity_slot_zeroed",
+    "source_identity_slot": "PROJECT_SOURCE_SHA256",
+    "source_sha256": "bfa754090510c26c228e8bbd115b7d9bf49279f255d03f180585f978a94ac20c"
+  },
+  "protocol_name": "fixed_parameter_rolling_walk_forward",
+  "protocol_schema_sha256": "30dc51fe7cdf5df7dd531f4bc6c1a19e34a7648a4b1c9851178bd77c54243cfd",
+  "protocol_version": "1.0.0",
+  "required_engine_provenance": {
+    "max_observation_payload_bytes": 16384,
+    "name": "quantconnect_lean",
+    "observation_prefix": "TRADING_BOT_LAB_LEAN_WALK_FORWARD_V1:",
+    "version_pattern": "^[0-9]{1,9}(?:\\.[0-9]{1,9}){1,5}$"
+  },
+  "risk": {
+    "account_type": "cash",
+    "automatic_liquidation": false,
+    "leverage": "1",
+    "long_only": true,
+    "max_daily_loss": "0.02",
+    "max_drawdown": "0.05",
+    "max_gross_exposure": "0.30",
+    "max_position_weight": "0.10"
+  },
+  "schema_version": "1.0.0",
+  "strategy": {
+    "fast_period": 20,
+    "slow_period": 50,
+    "target_weight": "0.10",
+    "warmup_bars": 50
+  }
+}

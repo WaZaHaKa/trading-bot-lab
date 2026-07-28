@@ -1,0 +1,8 @@
+{
+  "algorithm-language": "Python",
+  "parameters": {
+    "data-transport": "local-file",
+    "object-store-key": ""
+  },
+  "description": "Backtest-only synthetic PARITY v1 identical-data observation project. live mode forbidden."
+}

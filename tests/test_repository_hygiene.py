@@ -152,6 +152,9 @@ def test_lean_workspace_is_active_backtest_only_and_legacy_is_preserved() -> Non
         "Strategies/SkeletonBacktest/README.md",
         "Strategies/SkeletonBacktest/config.json",
         "Strategies/SkeletonBacktest/main.py",
+        "Strategies/ParityFixtureV1/README.md",
+        "Strategies/ParityFixtureV1/config.json",
+        "Strategies/ParityFixtureV1/main.py",
     }
     workspace_actual = {
         path.relative_to(ROOT / "lean-workspace").as_posix()
@@ -196,6 +199,10 @@ def test_repository_current_state_is_public() -> None:
         "lean-workspace/storage/Object Store/state.json",
         "lean-workspace/Strategies/SkeletonBacktest/backtests/run/result.json",
         "lean-workspace/Strategies/MovingAverageBaseline/optimizations/run/result.json",
+        "lean-workspace/data/custom/parity/v1/synthetic_weekdays.csv",
+        "lean-workspace/Strategies/ParityFixtureV1/backtests/run/result.json",
+        "reports/parity/lean-observation.json",
+        "logs/parity/lean-backtest.log",
         "lean-workspace/live/session.json",
         "lean-workspace/logs/run.log",
         "reports/lean-cloud/skeleton-validation.log",
@@ -224,6 +231,9 @@ def test_lean_workspace_generated_paths_are_ignored(relative: str) -> None:
         "lean-workspace/Strategies/MovingAverageBaseline/main.py",
         "lean-workspace/Strategies/MovingAverageBaseline/config.json",
         "tests/fixtures/parity/v1/synthetic_weekdays.csv",
+        "lean-workspace/Strategies/ParityFixtureV1/main.py",
+        "lean-workspace/Strategies/ParityFixtureV1/config.json",
+        "lean-workspace/Strategies/ParityFixtureV1/README.md",
         "tests/fixtures/parity/v1/scenario.json",
     ],
 )
@@ -421,17 +431,23 @@ def test_preflight_rejects_force_tracked_operator_linkage_file() -> None:
         "contracts/parity/v1/contract.json",
         "contracts/lean-cloud-validation/v1/2026-07-28.json",
         "contracts/lean-cloud-validation/v1/record.schema.json",
+        "lean-workspace/Strategies/ParityFixtureV1/main.py",
+        "lean-workspace/Strategies/ParityFixtureV1/config.json",
     ],
 )
 def test_versioned_contract_identity_files_have_lf_policy(relative: str) -> None:
     result = subprocess.run(
-        ["git", "-C", str(ROOT), "check-attr", "eol", "--", relative],
+        ["git", "-C", str(ROOT), "check-attr", "text", "eol", "--", relative],
         check=True,
         capture_output=True,
         text=True,
     )
 
-    assert result.stdout.rstrip().endswith(": lf")
+    assert f"{relative}: text: set" in result.stdout
+    assert f"{relative}: eol: lf" in result.stdout
+    checked_out = (ROOT / relative).read_bytes()
+    assert b"\r\n" not in checked_out
+    assert checked_out.endswith(b"\n")
 
 
 def test_cloud_validation_digest_bound_files_have_canonical_lf_bytes() -> None:

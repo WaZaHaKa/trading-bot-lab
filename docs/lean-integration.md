@@ -1,7 +1,7 @@
 # LEAN integration guide
 
-Status: **LEAN cloud engine validation completed for both research projects;
-live trading remains prohibited.**
+Status: **LEAN cloud engine validation completed for both SPY research projects;
+identical-data parity remains pending and live trading remains prohibited.**
 
 LEAN is the primary cross-asset research engine. The local Python CSV engine
 remains an independent deterministic oracle and must not be deleted or changed
@@ -20,6 +20,10 @@ lean-workspace/
       config.json                   public configuration only
       README.md
     MovingAverageBaseline/
+      main.py
+      config.json                   public configuration only
+      README.md
+    ParityFixtureV1/
       main.py
       config.json                   public configuration only
       README.md
@@ -55,9 +59,26 @@ for the next market open; the local oracle instead halts without automatic
 liquidation. That difference is intentional and must remain visible in parity
 reports.
 
-Both projects raise immediately if LEAN reports live mode. Neither project has
-a brokerage connection, secret, live configuration, optimizer, model, or data
-download path.
+`ParityFixtureV1` is the separate identical-data project. It reads only the
+eight-row `1.0.0` scenario fixture at
+`tests/fixtures/parity/v1/synthetic_weekdays.csv`, exact-byte SHA-256
+`a68bcf7fc30d2593b32e5a98852c4f8e0190ed99865640485b344515d9f1f78a`.
+Its strategy, costs, precision, next-row-open execution, position limits, and
+halt behavior are fixed to and regression-tested against the versioned
+scenario. It emits long or flat observations only and never uses leverage or
+shorting.
+
+The dedicated project defaults to `data-transport=local-file` and resolves
+`Globals.data_folder/custom/parity/v1/synthetic_weekdays.csv`. The only other
+accepted value is the explicit `object-store` mode, which requires
+`object-store-key=trading-bot-lab/parity/v1/synthetic_weekdays.csv`. Both modes
+use the same parser and financial logic. There is no remote URL, automatic
+upload or download, network fallback, external market data, or optimization.
+
+All three projects raise immediately if LEAN reports live mode. None contains a
+secret, live configuration, model, data-download path, or broker/exchange
+integration. Only the two SPY projects have completed a LEAN run;
+`ParityFixtureV1` has not.
 
 ## Canonical cloud validation
 
@@ -113,18 +134,18 @@ accounting parity; the cloud-validation record cannot promote those statuses.
 
 Leave the working `lean-workspace/lean.json` in place as an ignored local file,
 and keep one recoverable operator-only backup outside the repository. Preserve
-CLI-linked versions of the two project configurations in a clearly named local
-stash or that backup before restoring their tracked public three-key forms.
-After a cloud session, refresh the private backup before preparing any commit.
+every CLI-linked project configuration in a clearly named local stash or that
+backup before restoring its tracked public three-key form. After a cloud
+session, refresh the private backup before preparing any commit.
 
 Never pop or apply a linkage stash during a commit workflow. Before review,
 verify that `git check-ignore --no-index lean-workspace/lean.json` succeeds,
-that the file is absent from `git ls-files`, that both project configs contain
-exactly the three public top-level keys, and that the staged diff contains no
-linkage IDs. Preflight reads the staged project-config blobs, so sanitizing only
-the worktree cannot hide private index content. This workflow preserves
-repeatable local cloud access without placing account or organization metadata
-in branch history.
+that the file is absent from `git ls-files`, that every tracked project config
+contains exactly the three public top-level keys, and that the staged diff
+contains no linkage IDs. Preflight reads staged project-config blobs, so
+sanitizing only the worktree cannot hide private index content. This workflow
+preserves repeatable local cloud access without placing account or organization
+metadata in branch history.
 
 ## Manual cloud workflow
 
@@ -154,13 +175,66 @@ Record only fields allowed by the versioned sanitized schema; keep any IDs,
 links, or raw output in ignored local evidence. `lean cloud status` reports live
 deployment status, not cloud-backtest status.
 
-## Local LEAN execution
+Those commands are the already completed SPY cloud-validation workflow. They do
+not authorize a `ParityFixtureV1` push, cloud backtest, or Object Store action.
+Any such action requires a later explicit operator approval.
 
-Local LEAN execution is optional. It requires Docker plus already-present or
-synthetic data. Never use `lean data download`, `--download-data`, or the
-QuantConnect historical data provider. A missing Docker engine or dataset does
-not invalidate the completed cloud-engine checks, but it leaves identical-data
-parity pending.
+## Identical-data preparation and future execution
+
+The offline preparer validates the committed fixture's LF bytes, schema version,
+rows, and exact hash, then atomically copies those same bytes to the ignored
+local path:
+
+```powershell
+python scripts\prepare_lean_parity_data.py
+```
+
+It is idempotent, rejects symlinks and unsafe destinations, and never invokes
+LEAN, Docker, QuantConnect, Object Store, a network, or a paid-data operation.
+Generated LEAN output stays under ignored `backtests/`; raw logs stay under
+`logs/`; normalized local and LEAN traces stay under `reports/` until explicitly
+sanitized and reviewed.
+
+During a separately authorized local session, the manual sequence is:
+
+```powershell
+$LeanExe = (Resolve-Path ".\.venv\Scripts\lean.exe").Path
+
+python scripts\export_local_parity.py `
+  --output reports\parity\local-v1.json
+
+New-Item -ItemType Directory -Force .\logs\parity | Out-Null
+Push-Location .\lean-workspace
+& $LeanExe backtest "Strategies/ParityFixtureV1" --no-update `
+  --output ".\Strategies\ParityFixtureV1\backtests\parity-v1" |
+  Tee-Object -FilePath "..\logs\parity\lean-v1.log"
+Pop-Location
+
+python scripts\extract_lean_parity.py `
+  --input logs\parity\lean-v1.log `
+  --output reports\parity\lean-v1.json
+
+python scripts\compare_lean_parity.py `
+  --local-trace reports\parity\local-v1.json `
+  --lean-trace reports\parity\lean-v1.json
+```
+
+LEAN must emit exactly one bounded line prefixed
+`TRADING_BOT_LAB_LEAN_PARITY_V1:`. The strict extractor accepts only its
+canonical JSON suffix, requires engine name `quantconnect_lean` and a dotted
+numeric runtime version, and rejects malformed or duplicate observations,
+non-finite numbers, paths, URLs, account metadata, cloud IDs, and credentials.
+
+A future, separately approved cloud run requires the operator to place the
+exact fixture bytes at the fixed Object Store key manually and explicitly set
+both transport parameters. Repository tooling performs no Object Store write.
+Never use `lean data download`, `--download-data`, a historical data provider,
+optimization, remote URL, or network fallback.
+
+No local or cloud LEAN execution or Object Store operation occurred in this
+implementation sprint. Execution-timing and numerical-accounting parity remain
+`pending_identical_data_execution` until an actual extracted
+`lean_engine_observation` passes every comparison dimension.
 
 See `windows-lean-setup.md`, `qcc-guardrails.md`,
 `execution-timing-comparison.md`, `risk-policy-mapping.md`, and

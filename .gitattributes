@@ -3,3 +3,9 @@ tests/fixtures/parity/v1/*.csv text eol=lf
 tests/fixtures/parity/v1/*.json text eol=lf
 contracts/parity/v1/*.json text eol=lf
 contracts/lean-cloud-validation/v1/*.json text eol=lf
+
+# Cloud-validation source/configuration digests bind exact bytes; keep LF on every OS.
+lean-workspace/Strategies/SkeletonBacktest/main.py text eol=lf
+lean-workspace/Strategies/SkeletonBacktest/config.json text eol=lf
+lean-workspace/Strategies/MovingAverageBaseline/main.py text eol=lf
+lean-workspace/Strategies/MovingAverageBaseline/config.json text eol=lf

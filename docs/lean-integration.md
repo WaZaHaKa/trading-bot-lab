@@ -83,6 +83,11 @@ push/validation logs. It omits account metadata, identifiers, URLs, absolute
 paths, warning text, and raw cloud output. Raw logs remain ignored and must
 never be committed.
 
+The repository-root `.gitattributes` requires canonical LF checkout bytes for
+every digest-bound public LEAN source and configuration file on every operating
+system. These remain exact-byte SHA-256 digests; hashing does not normalize
+newlines.
+
 The Draft 2020-12 schema closes project identity, canonical parameters, finite
 canonical decimal ranges, lifecycle implications, and derived validation
 classification. The typed Python normalizer remains authoritative for recursive

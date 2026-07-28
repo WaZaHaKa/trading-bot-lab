@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import tomllib
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -431,6 +432,61 @@ def test_versioned_contract_identity_files_have_lf_policy(relative: str) -> None
     )
 
     assert result.stdout.rstrip().endswith(": lf")
+
+
+def test_cloud_validation_digest_bound_files_have_canonical_lf_bytes() -> None:
+    record = json.loads(
+        (ROOT / "contracts" / "lean-cloud-validation" / "v1" / "2026-07-28.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    bindings: list[tuple[str, str]] = []
+    for project in record["projects"]:
+        project_root = Path("lean-workspace") / project["project_name"]
+        digests = project["evidence_sha256"]
+        bindings.extend(
+            [
+                ((project_root / "main.py").as_posix(), digests["source_sha256"]),
+                (
+                    (project_root / "config.json").as_posix(),
+                    digests["public_configuration_sha256"],
+                ),
+            ]
+        )
+
+    relative_paths = [relative for relative, _ in bindings]
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "check-attr", "-z", "text", "eol", "--", *relative_paths],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    fields = result.stdout.split("\0")
+    assert fields[-1] == "", "git check-attr output was not NUL terminated"
+    fields.pop()
+    assert len(fields) % 3 == 0, (
+        "git check-attr output did not contain path/attribute/value triples"
+    )
+    attributes: dict[str, dict[str, str]] = {}
+    for index in range(0, len(fields), 3):
+        relative, attribute, value = fields[index : index + 3]
+        attributes.setdefault(relative, {})[attribute] = value
+
+    for relative, expected_digest in bindings:
+        resolved = attributes.get(relative, {})
+        assert resolved.get("text") == "set", (
+            f"{relative}: expected effective Git text=set, got {resolved.get('text')!r}"
+        )
+        assert resolved.get("eol") == "lf", (
+            f"{relative}: expected effective Git eol=lf, got {resolved.get('eol')!r}"
+        )
+        checked_out_bytes = (ROOT / relative).read_bytes()
+        assert b"\r\n" not in checked_out_bytes, f"{relative}: checkout contains CRLF bytes"
+        actual_digest = sha256(checked_out_bytes).hexdigest()
+        assert actual_digest == expected_digest, (
+            f"{relative}: checked-out SHA-256 {actual_digest} does not match canonical "
+            f"evidence digest {expected_digest}"
+        )
 
 
 def test_ci_has_no_lean_cloud_live_login_optimization_or_data_command() -> None:

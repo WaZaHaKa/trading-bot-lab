@@ -20,8 +20,27 @@ SCENARIO = ROOT / "tests" / "fixtures" / "parity" / "v1" / "scenario.json"
 CONTRACT = ROOT / "contracts" / "parity" / "v1" / "contract.json"
 HISTORICAL_RECORD_SHA256 = "5832d6948bec3e4e672227200bf9e03484e5515afa2c3a14e07682e3200cf6f5"
 CORRECTION_COMMIT_SHA = "a675e559e4660809b3bec5f3415935504f8c01c1"
+SUCCESSFUL_RERUN_RECORD_SHA256 = "38bee6caa72b283af1c0f61b5a62c74732803050afad928826768aa632e930c2"
 HISTORICAL_ALGORITHM_SOURCE_SHA256 = (
     "55d012866ca83622e433b6b298bbac9f0f7cf1c7254679c1bd653b7b23d1ac6f"
+)
+EXPECTED_COMPARISON_DIMENSIONS = (
+    "fixture_identity",
+    "bar_visibility",
+    "signal_timing",
+    "intent_timing",
+    "fill_timing",
+    "trade_direction_and_count",
+    "position_state",
+    "fees",
+    "slippage",
+    "cash",
+    "realized_unrealized_pnl",
+    "equity",
+    "exposure",
+    "drawdown",
+    "final_bar_behavior",
+    "rejection_and_halt_state",
 )
 GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -96,6 +115,7 @@ def test_successful_rerun_is_deterministic_public_and_content_bound() -> None:
     text = RERUN_RECORD_PATH.read_text(encoding="utf-8")
     record = json.loads(text)
 
+    assert _sha256(RERUN_RECORD_PATH) == SUCCESSFUL_RERUN_RECORD_SHA256
     assert text == json.dumps(record, allow_nan=False, indent=2, sort_keys=True) + "\n"
     _assert_no_float(record)
     assert record["schema_version"] == "1.0.0"
@@ -197,6 +217,11 @@ def test_local_parity_records_have_truthful_status_coherence() -> None:
             assert divergence_dimensions == failed_dimensions
             assert record["classifications"]["numerical_accounting_parity"] == "failed"
             assert record["classifications"]["overall_status"] == "genuine_local_lean_parity_failed"
+
+
+def test_parity_comparison_dimensions_remain_the_exact_v1_set() -> None:
+    assert len(COMPARISON_DIMENSIONS) == 16
+    assert COMPARISON_DIMENSIONS == EXPECTED_COMPARISON_DIMENSIONS
 
 
 def test_failed_dimension_and_divergence_are_truthful_and_bounded() -> None:

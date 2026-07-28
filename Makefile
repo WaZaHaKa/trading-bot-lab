@@ -1,3 +1,5 @@
+WALK_FORWARD_TESTS := $(wildcard tests/test_walk_forward*.py)
+
 .PHONY: test lint format format-check preflight lean-static validate-csv local-backtest paper-replay check tree
 
 test:
@@ -16,7 +18,7 @@ preflight:
 	python scripts/preflight_check.py
 
 lean-static:
-	python -m pytest tests/test_repository_hygiene.py tests/test_lean_projects.py tests/test_lean_parity_data.py
+	python -m pytest tests/test_repository_hygiene.py tests/test_lean_projects.py tests/test_lean_parity_data.py $(WALK_FORWARD_TESTS)
 
 validate-csv:
 	python -m trading_bot_lab validate-csv

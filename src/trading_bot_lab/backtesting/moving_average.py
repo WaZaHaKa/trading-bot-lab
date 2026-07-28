@@ -27,14 +27,28 @@ class MovingAverageStrategy:
 
         return "moving_average"
 
+    @property
+    def configuration(self) -> tuple[tuple[str, str | int | float | bool], ...]:
+        return (
+            ("fast_window", self.fast_window),
+            ("slow_window", self.slow_window),
+            ("target_weight", self.target_weight),
+        )
+
     def __post_init__(self) -> None:
-        if self.fast_window <= 0:
-            raise ValueError("fast_window must be positive")
-        if self.slow_window <= 0:
-            raise ValueError("slow_window must be positive")
+        if type(self.fast_window) is not int or self.fast_window <= 0:
+            raise ValueError("fast_window must be a positive integer")
+        if type(self.slow_window) is not int or self.slow_window <= 0:
+            raise ValueError("slow_window must be a positive integer")
         if self.fast_window >= self.slow_window:
             raise ValueError("fast_window must be smaller than slow_window")
-        if not isfinite(self.target_weight) or self.target_weight < 0 or self.target_weight > 1:
+        if (
+            isinstance(self.target_weight, bool)
+            or not isinstance(self.target_weight, (int, float))
+            or not isfinite(self.target_weight)
+            or self.target_weight < 0
+            or self.target_weight > 1
+        ):
             raise ValueError("target_weight must be finite and between 0 and 1")
 
     def target_for_closes(self, closes: Sequence[float]) -> float:
@@ -70,6 +84,10 @@ class NoTradeStrategy:
     @property
     def name(self) -> str:
         return "no_trade"
+
+    @property
+    def configuration(self) -> tuple[tuple[str, str | int | float | bool], ...]:
+        return ()
 
     def signal_for_history(self, history: Sequence[MarketBar]) -> Signal:
         if not history:

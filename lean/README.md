@@ -1,25 +1,23 @@
-# LEAN workspace
+# Preserved pre-activation LEAN files
 
-This directory is reserved for QuantConnect LEAN projects.
+This directory contains the original LEAN project drafts. Active migration work
+lives under `../lean-workspace/Strategies/`.
 
 ## Current status
 
-LEAN CLI work is paused. The owner hit a paid QuantConnect organization
-requirement and does not want to spend money for the current milestone.
+**LEAN active for cloud research/backtesting; live trading remains prohibited.**
 
-Keep these folders for later, but do not add QuantConnect credentials, broker
-credentials, exchange keys, paid data-vendor keys, or live-trading config.
+Keep this tree unchanged until both migrated cloud projects complete and the
+migration checklist is reviewed. It is not yet marked superseded. Do not add
+QuantConnect credentials, broker credentials, exchange keys, paid data-vendor
+keys, or live-trading config here.
 
-The active free MVP path is documented in `../docs/local-backtesting.md`.
-See `../docs/lean-paused.md` for the pause decision.
+## Historical goal
 
-## Initial goal
+These drafts were created before the paid organization became available. They
+are retained for migration comparison, not as the active cloud projects.
 
-When LEAN is reactivated later, run a no-trade skeleton backtest locally before
-evaluating any trading logic. Then run the experimental long-only
-moving-average baseline as a smoke test.
-
-## Expected local workflow later
+## Historical local workflow
 
 ```bash
 lean init
@@ -27,8 +25,8 @@ lean backtest "lean/algorithms/SkeletonBacktest"
 lean backtest "lean/algorithms/MovingAverageBaseline"
 ```
 
-Exact commands may differ depending on how you install and configure LEAN CLI.
-See `../docs/lean-getting-started.md` for the full local guide.
+Do not run these legacy commands as activation evidence. See
+`../docs/lean-integration.md` for the scoped active workflow.
 
 ## Safety
 

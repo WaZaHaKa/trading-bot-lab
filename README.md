@@ -1,20 +1,25 @@
 # trading-bot-lab
 
-Private, research-first platform for deterministic stock and cryptocurrency
-backtesting and fully local historical paper replay.
+Public, research-first platform for deterministic stock and cryptocurrency
+backtesting, QuantConnect LEAN cloud research, and fully local historical paper
+replay.
 
-The active platform does not connect to a network, broker, exchange, or paid
-data service. It has no live-trading mode. Backtests are hypothetical, synthetic
-sample results are not meaningful market results, past performance does not
-guarantee future results, and nothing in this repository is financial advice.
+LEAN cloud backtests are the primary cross-asset research path. The repository's
+Python runtime does not connect to a network, broker, exchange, or paid data
+service and remains the independent regression/accounting oracle. No component
+has a live-trading mode. Backtests are hypothetical, synthetic sample results
+are not meaningful market results, past performance does not guarantee future
+results, and nothing in this repository is financial advice.
 
 ## Active architecture
 
-The free local Python engine is authoritative:
+LEAN is the primary strategy engine for cloud research/backtesting. The free
+local Python engine remains authoritative for its own deterministic timing,
+risk, and accounting contract:
 
 ```text
 validated UTC OHLCV events
-  -> read-only feature/strategy history
+  -> bounded read-only feature/strategy history
   -> target-allocation signal
   -> order intent
   -> deterministic risk decision
@@ -27,16 +32,17 @@ The same incremental engine powers batch backtests and historical paper replay.
 Strategies cannot mutate portfolio state or submit fills. Every order intent
 passes through `trading_bot_lab.risk`.
 
-QuantConnect LEAN files remain under `lean/`, but LEAN is paused because the
-attempted CLI workflow required a paid QuantConnect organization. LEAN is not
-part of the active MVP and its files must not be removed. See
-`docs/lean-paused.md`.
+The active LEAN projects live under `lean-workspace/Strategies/`. The pre-existing
+`lean/` tree is preserved until both migrated projects complete cloud backtests
+and the migration checklist is reviewed. See `docs/lean-integration.md` and
+ADR 0007.
 
 ## Safety defaults
 
-- Backtest mode unless the historical paper-replay command is explicitly selected.
+- Backtest mode unless the local historical paper-replay command is explicitly selected.
+- LEAN cloud research/backtesting is allowed only through named, manually run projects.
 - Paper replay is local CSV playback, not a broker sandbox.
-- No live mode, broker/exchange adapter, API key, withdrawal path, or network call.
+- No live mode, broker/exchange adapter, committed API key, or withdrawal path.
 - Long-only, no leverage, no margin, no derivatives, no shorting, and no market making.
 - 10% maximum pre-trade asset weight and 30% maximum total gross exposure.
 - 2% daily-loss and 5% peak-to-equity drawdown circuit breakers.
@@ -51,13 +57,17 @@ src/trading_bot_lab/backtesting/   CSV boundary, strategies, engine, reports
 src/trading_bot_lab/risk/          independent fail-closed risk policy
 src/trading_bot_lab/paper.py       local historical replay lifecycle
 src/trading_bot_lab/observability.py bounded JSON-lines logging
+src/trading_bot_lab/artifacts.py    atomic local artifact writes
+src/trading_bot_lab/provenance.py   path-safe content provenance
 src/trading_bot_lab/cli.py          package CLI
 scripts/                            compatible convenience entry points
 tests/                              unit, integration, regression, and hygiene tests
 data/sample/                        committed synthetic demo data only
 data/local/                         ignored user-provided local data
 reports/ and logs/                  ignored generated artifacts
-lean/                               preserved, paused LEAN workspace
+lean-workspace/                     active LEAN cloud project workspace
+lean/                               preserved pre-activation LEAN files
+contracts/parity/                   versioned cross-engine comparison contract
 docs/                               policies, workflows, schemas, and ADRs
 ```
 
@@ -75,7 +85,7 @@ python -m pip install -e ".[dev]"
 python -m trading_bot_lab show-config
 python -m trading_bot_lab validate-csv
 python scripts\run_local_backtest.py
-python scripts\run_paper_replay.py
+python scripts\run_historical_paper_replay.py
 python -m pytest
 python -m ruff check .
 python -m ruff format --check .
@@ -92,7 +102,7 @@ python -m pip install -e '.[dev]'
 python -m trading_bot_lab show-config
 python -m trading_bot_lab validate-csv
 python scripts/run_local_backtest.py
-python scripts/run_paper_replay.py
+python scripts/run_historical_paper_replay.py
 python -m pytest
 python -m ruff check .
 python -m ruff format --check .
@@ -100,6 +110,10 @@ python scripts/preflight_check.py
 ```
 
 `make check` runs lint, format-check, tests, and preflight when Make is available.
+
+LEAN setup and the two explicitly scoped cloud commands are documented in
+`docs/windows-lean-setup.md` and `docs/lean-integration.md`. Cloud commands are
+never part of `make check` or CI.
 
 ## CLI examples
 
@@ -125,16 +139,21 @@ python scripts\run_local_backtest.py `
   --export-csv reports\equity.csv `
   --export-trades-csv reports\trades.csv `
   --export-rejections-csv reports\rejected.csv `
+  --export-risk-events-csv reports\risk-events.csv `
   --log-jsonl logs\backtest.jsonl
 ```
 
 Replay historical rows one at a time through the same risk and accounting core:
 
 ```powershell
-python scripts\run_paper_replay.py
-python scripts\run_paper_replay.py --replay-speed-seconds 0.1
-python scripts\run_paper_replay.py --kill-switch-after-bars 8 `
-  --export-json reports\paper-session.json `
+python scripts\run_historical_paper_replay.py
+python scripts\run_historical_paper_replay.py --speed 0.1
+python scripts\run_historical_paper_replay.py --kill-switch-after-bars 8 `
+  --export-manifest reports\paper-session.json `
+  --export-equity-csv reports\paper-equity.csv `
+  --export-trades-csv reports\paper-trades.csv `
+  --export-rejections-csv reports\paper-rejections.csv `
+  --export-risk-events-csv reports\paper-risk-events.csv `
   --log-jsonl logs\paper-session.jsonl
 ```
 
@@ -143,13 +162,23 @@ python scripts\run_paper_replay.py --kill-switch-after-bars 8 `
 - CSV `date` values normalize to midnight UTC. Timestamp values must include a timezone.
 - The loader never silently sorts or deduplicates data.
 - A signal generated after bar N closes may execute only at bar N+1 open.
-- An actionable pending signal fails closed if the next bar has no open price.
+- Every simulation bar must have a valid open before the run starts; close fallback is prohibited.
+- A final-bar signal expires without creating an intent or fill.
+- Fill timestamps label the execution bar and `execution_phase=open` identifies the phase.
 - Fractional quantities are rounded to 8 decimal places; cash/accounting values to 8 decimals.
 - The current money model uses bounded/rounded binary floats, not `Decimal`.
+- Target translation accounts for projected fees and adverse slippage so accepted exposure does
+  not cross the requested or configured post-cost weight.
 - Average cost uses simulated execution prices. Realized and unrealized PnL are gross of fees;
   fees are tracked separately. Slippage is embedded in execution PnL and also estimated separately.
 - Open positions remain open at the end and are valued at the last close; forced liquidation is off.
-- Buy-and-hold starts at the first open when present and is an uncosted comparison baseline.
+- Daily starting equity is the preceding close and resets only at a UTC date boundary.
+- Buy-and-hold enters after configured warm-up, uses the same buy slippage,
+  fee/minimum-fee and quantity precision, keeps residual cash nonnegative, and
+  remains open at the final close; reports disclose the full methodology.
+- Results embed the exact backtest assumptions and effective stricter risk configuration.
+- Input provenance uses an exact-byte SHA-256 and safe filename without absolute paths.
+- Strategy history is immutable and bounded by `--strategy-history-bars`.
 
 See `docs/local-backtesting.md`, `docs/risk-policy.md`, and
 `docs/report-schemas.md` for stable details.
@@ -159,49 +188,66 @@ See `docs/local-backtesting.md`, `docs/risk-policy.md`, and
 Only clearly synthetic or redistributable tiny demonstration data may be committed.
 Downloaded or user-provided market data belongs under ignored `data/local/`,
 `data/raw/`, or `data/processed/` paths. Generated reports, logs, notebook
-outputs, model files, package metadata, and caches stay ignored.
+outputs, session checkpoints, model files, package metadata, and caches stay ignored.
+LEAN workspace data, Object Store content, backtests, optimizations, live output,
+and caches are also ignored. A credential-free `lean-workspace/lean.json` may be
+tracked only after preflight and manual review.
+The CLI accepts in-repository reports only under `reports/` and logs only under
+`logs/`; absolute output paths outside the repository are allowed. Ignored
+repository-root `.pytest-*` and `.pytest_*` trees are reserved as automated-test
+scratch space, not normal report locations. Structured logs also reserve their
+configured rotation sidecars so they cannot alias an input or selected report.
 
 ## Testing
 
 The suite covers CSV validation, UTC normalization, OHLC consistency, gap and
-volume policies, moving averages, signal timing, future-row protection, costs,
-cash and average-cost accounting, realized/unrealized PnL, exposure, drawdown,
-risk rejections, latched halts, kill-switch transitions, benchmarks, report
-schemas, paper replay, CLI integration, ignore rules, and repository hygiene.
+volume policies, moving averages, final-bar and next-open timing, future-row and
+strategy-state protection, costs, cash and average-cost accounting,
+realized/unrealized PnL, post-cost exposure, UTC daily loss, opening-peak
+drawdown, typed risk failures, latched halts, kill-switch transitions,
+costed benchmarks, atomic report schemas, content-bound session identity,
+bounded paper replay, zero-bar lifecycle outcomes, structured logs, CLI
+integration, ignore rules, and repository hygiene.
 
-CI runs Python 3.11, Ruff, pytest, and preflight on Ubuntu. Local pytest uses a
-repository-local ignored temp directory to avoid Windows temp ACL problems.
+CI runs Python 3.11, Ruff, pytest, preflight, LEAN source/config static checks,
+and parity-contract tests on Ubuntu and Windows. It never authenticates to
+QuantConnect or invokes a cloud, data, optimization, or live command. Local
+pytest uses a repository-local ignored temp directory to avoid Windows temp ACL
+problems.
 
 ## Troubleshooting
 
 - If `python` is missing, activate `.venv` or recreate it with `py -3.11 -m venv .venv`.
 - If `.venv\Scripts\python.exe` names a removed installation, recreate the virtual environment;
   launchers are machine-local and should not be copied between machines.
-- If a trade is due and `open` is absent, add valid OHLC data; the engine will not fall back to a
-  same-bar close.
+- If any simulation bar lacks `open`, add valid OHLC data; the engine validates the entire sequence
+  before mutation and never falls back to a same-bar close.
 - Gap and missing-volume warnings can be configured at the CSV boundary. Invalid prices,
   duplicates, inconsistent OHLC, and unsorted timestamps are always fatal.
 - Generated outputs should be placed only under ignored local artifact directories.
 
 ## Known limitations
 
-- One symbol per simulation and fractional shares only.
+- One symbol per simulation; fractional quantities are supported at configurable precision.
 - No dividends, splits, corporate actions, borrow, funding, spread, order-book liquidity,
   market impact, partial fills, or exchange calendars.
 - No point-in-time universe or survivorship-bias correction.
-- Daily loss uses the prior processed bar's closing equity as start-of-day equity.
+- UTC calendar dates define daily-loss boundaries; exchange-session calendars are not modeled.
 - No advanced annualized statistics; the short synthetic sample cannot justify them.
-- Historical replay is synchronous and local, with no external clock or broker reconciliation.
+- Historical replay is synchronous and local, with no restart checkpoint,
+  external clock, or broker reconciliation.
 - No ML execution path, database, cloud deployment, dashboard, or live trading.
+
+Additional LEAN and cross-engine limitations are maintained in
+`docs/known-limitations.md`.
 
 ## Roadmap
 
-The next safe milestone is broader offline historical-data testing, followed by
-walk-forward validation and Monte Carlo trade-sequence analysis. Simulated
-multi-asset portfolio support and shadow model interfaces remain later options.
-Live trading is not a recommended next milestone.
+The next safe milestone is **walk-forward validation using LEAN cloud backtests
+and local parity checks**. Live trading is not a recommended next milestone.
 
 ## License
 
-No open-source license is selected. Keep the repository private unless the owner
-explicitly decides to publish a reviewed subset.
+This repository is public, but no open-source license is selected. Public
+visibility does not by itself grant permission to copy, modify, or redistribute
+the code. See `LICENSE_NOT_SELECTED.md`.

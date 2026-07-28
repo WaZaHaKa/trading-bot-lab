@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from math import isfinite
+from re import fullmatch
 from typing import Protocol
 
 
@@ -23,10 +24,109 @@ class DataValidationError(DomainValidationError):
     """Raised when input market data fails closed validation."""
 
 
+class SessionStateError(RuntimeError):
+    """Raised when a paper-replay lifecycle transition is illegal."""
+
+
 class ExecutionTiming(StrEnum):
     """Supported signal-to-fill timing models."""
 
     NEXT_BAR_OPEN = "next_bar_open"
+
+
+class ExecutionPhase(StrEnum):
+    """Phase within the timestamp-labelled execution bar."""
+
+    OPEN = "open"
+
+
+@dataclass(frozen=True)
+class BacktestConfig:
+    """Resolved simulation, cost, precision, and safety assumptions."""
+
+    initial_cash: float = 100_000.0
+    fee_bps: float = 0.0
+    minimum_fee: float = 0.0
+    slippage_bps: float = 0.0
+    max_position_pct: float = 0.10
+    max_total_exposure_pct: float = 0.30
+    max_order_notional_pct: float = 0.10
+    max_daily_loss_pct: float = 0.02
+    max_drawdown_pct: float = 0.05
+    max_open_positions: int = 1
+    warmup_bars: int = 0
+    data_age_seconds: int = 0
+    trading_enabled: bool = True
+    kill_switch_active: bool = False
+    execution_timing: ExecutionTiming = ExecutionTiming.NEXT_BAR_OPEN
+    quantity_precision: int = 8
+    money_precision: int = 8
+    strategy_history_limit: int = 10_000
+
+    def __post_init__(self) -> None:
+        _require_positive(self.initial_cash, "initial_cash")
+        for value, name in (
+            (self.fee_bps, "fee_bps"),
+            (self.minimum_fee, "minimum_fee"),
+            (self.slippage_bps, "slippage_bps"),
+        ):
+            _require_non_negative(value, name)
+        if self.slippage_bps >= 10_000:
+            raise ValueError("slippage_bps must be less than 10000")
+        for value, name in (
+            (self.max_position_pct, "max_position_pct"),
+            (self.max_total_exposure_pct, "max_total_exposure_pct"),
+            (self.max_order_notional_pct, "max_order_notional_pct"),
+            (self.max_daily_loss_pct, "max_daily_loss_pct"),
+            (self.max_drawdown_pct, "max_drawdown_pct"),
+        ):
+            _require_fraction(value, name)
+        if self.max_position_pct > self.max_total_exposure_pct:
+            raise ValueError("max_position_pct cannot exceed max_total_exposure_pct")
+        _require_int_at_least(self.max_open_positions, "max_open_positions", minimum=1)
+        _require_int_at_least(self.warmup_bars, "warmup_bars", minimum=0)
+        _require_int_at_least(self.data_age_seconds, "data_age_seconds", minimum=0)
+        _require_int_at_least(self.quantity_precision, "quantity_precision", minimum=0)
+        _require_int_at_least(self.money_precision, "money_precision", minimum=8)
+        _require_int_at_least(
+            self.strategy_history_limit,
+            "strategy_history_limit",
+            minimum=1,
+        )
+        if self.quantity_precision > 12:
+            raise ValueError("quantity_precision must be between 0 and 12")
+        if self.money_precision > 12:
+            raise ValueError("money_precision must be between 8 and 12")
+        if round(self.initial_cash, self.money_precision) != self.initial_cash:
+            raise ValueError("initial_cash must be representable at money_precision")
+        if type(self.trading_enabled) is not bool:
+            raise ValueError("trading_enabled must be a bool")
+        if type(self.kill_switch_active) is not bool:
+            raise ValueError("kill_switch_active must be a bool")
+        try:
+            timing = ExecutionTiming(self.execution_timing)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("execution_timing must be a supported execution model") from exc
+        if timing is not ExecutionTiming.NEXT_BAR_OPEN:
+            raise ValueError("only next_bar_open execution is supported")
+        object.__setattr__(self, "execution_timing", timing)
+
+
+@dataclass(frozen=True)
+class RiskConfiguration:
+    """Effective risk limits embedded in a completed simulation result."""
+
+    allow_live_trading: bool
+    allow_shorting: bool
+    allow_leverage: bool
+    max_asset_weight: float
+    max_total_gross_exposure: float
+    max_order_notional_weight: float
+    max_daily_loss_pct: float
+    max_drawdown_pct: float
+    max_data_age_seconds: int
+    max_open_positions: int
+    allowed_symbols: tuple[str, ...]
 
 
 class OrderSide(StrEnum):
@@ -76,6 +176,8 @@ class RiskReason(StrEnum):
     DAILY_LOSS = "daily loss limit breached"
     MAX_DRAWDOWN = "drawdown limit breached"
     HALTED = "portfolio is halted"
+    PROJECTED_EQUITY_NON_POSITIVE = "projected post-fill equity must be positive"
+    RISK_EVALUATION_ERROR = "risk evaluation failed closed"
 
 
 class WarningCode(StrEnum):
@@ -86,17 +188,20 @@ class WarningCode(StrEnum):
     SYNTHETIC_DATA = "synthetic_data"
     HYPOTHETICAL_RESULTS = "hypothetical_results"
     LOCAL_ARTIFACT = "local_artifact"
+    EVENT_SINK_FAILURE = "event_sink_failure"
 
 
 class PaperSessionStatus(StrEnum):
     """Explicit local paper-replay lifecycle states."""
 
     CREATED = "created"
+    VALIDATED = "validated"
     RUNNING = "running"
     PAUSED = "paused"
     STOPPED = "stopped"
     COMPLETED = "completed"
     HALTED = "halted"
+    FAILED = "failed"
 
 
 def normalize_timestamp_utc(value: datetime | date) -> datetime:
@@ -153,17 +258,15 @@ class MarketBar:
         if raw_timestamp is None:
             raise DomainValidationError("timestamp is required")
 
-        normalized_symbol = symbol.strip().upper()
-        if not normalized_symbol:
-            raise DomainValidationError("symbol must be non-empty")
-        if timeframe_seconds <= 0:
-            raise DomainValidationError("timeframe_seconds must be positive")
+        normalized_symbol = normalize_symbol(symbol, field_name="symbol")
+        if type(timeframe_seconds) is not int or timeframe_seconds <= 0:
+            raise DomainValidationError("timeframe_seconds must be a positive integer")
 
         values = {"close": close, "open": open, "high": high, "low": low}
         for name, value in values.items():
-            if value is not None and (not isfinite(value) or value <= 0):
+            if value is not None and (not _is_finite_number(value) or value <= 0):
                 raise DomainValidationError(f"{name} must be positive and finite")
-        if volume is not None and (not isfinite(volume) or volume < 0):
+        if volume is not None and (not _is_finite_number(volume) or volume < 0):
             raise DomainValidationError("volume must be non-negative and finite")
         if high is not None and low is not None and high < low:
             raise DomainValidationError("high must be greater than or equal to low")
@@ -195,11 +298,21 @@ PriceBar = MarketBar
 
 @dataclass(frozen=True)
 class DataWarning:
-    """Actionable non-fatal data-quality warning."""
+    """Actionable non-fatal input-data or simulation warning."""
 
     code: WarningCode
     message: str
     timestamp: datetime | None = None
+
+    @property
+    def is_data_validation(self) -> bool:
+        """Return whether the warning describes the input dataset itself."""
+
+        return self.code in {
+            WarningCode.LARGE_TIME_GAP,
+            WarningCode.MISSING_VOLUME,
+            WarningCode.SYNTHETIC_DATA,
+        }
 
 
 @dataclass(frozen=True)
@@ -207,12 +320,53 @@ class MarketDataMetadata:
     """Stable metadata describing validated input data."""
 
     source: str
+    content_sha256: str
+    bars_sha256: str
     symbol: str
     row_count: int
     start_timestamp: datetime
     end_timestamp: datetime
     timeframe_seconds: int
     timezone: str = "UTC"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source, str):
+            raise DomainValidationError("market-data source must be a string")
+        normalized_source = self.source.strip()
+        if not normalized_source:
+            raise DomainValidationError("market-data source must be non-empty")
+        if "/" in normalized_source or "\\" in normalized_source or ":" in normalized_source:
+            raise DomainValidationError("market-data source must be a filename, not a path")
+        if normalized_source in {".", ".."}:
+            raise DomainValidationError("market-data source must be a safe filename")
+        if (
+            not isinstance(self.content_sha256, str)
+            or fullmatch(r"[0-9a-f]{64}", self.content_sha256) is None
+        ):
+            raise DomainValidationError("market-data content_sha256 must be lowercase SHA-256")
+        if (
+            not isinstance(self.bars_sha256, str)
+            or fullmatch(r"[0-9a-f]{64}", self.bars_sha256) is None
+        ):
+            raise DomainValidationError("market-data bars_sha256 must be lowercase SHA-256")
+        normalized_symbol = normalize_symbol(
+            self.symbol,
+            field_name="market-data symbol",
+        )
+        if type(self.row_count) is not int or self.row_count <= 0:
+            raise DomainValidationError("market-data row_count must be a positive integer")
+        if type(self.timeframe_seconds) is not int or self.timeframe_seconds <= 0:
+            raise DomainValidationError("market-data timeframe_seconds must be a positive integer")
+        start = normalize_timestamp_utc(self.start_timestamp)
+        end = normalize_timestamp_utc(self.end_timestamp)
+        if end < start:
+            raise DomainValidationError("market-data end_timestamp cannot precede start_timestamp")
+        if self.timezone != "UTC":
+            raise DomainValidationError("market-data timezone must be UTC")
+        object.__setattr__(self, "source", normalized_source)
+        object.__setattr__(self, "symbol", normalized_symbol)
+        object.__setattr__(self, "start_timestamp", start)
+        object.__setattr__(self, "end_timestamp", end)
 
 
 @dataclass(frozen=True)
@@ -222,6 +376,21 @@ class MarketDataSet:
     bars: tuple[MarketBar, ...]
     metadata: MarketDataMetadata
     warnings: tuple[DataWarning, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.bars:
+            raise DomainValidationError("market-data bars must not be empty")
+        if len(self.bars) != self.metadata.row_count:
+            raise DomainValidationError("market-data metadata row_count does not match bars")
+        if self.bars[0].timestamp != self.metadata.start_timestamp:
+            raise DomainValidationError("market-data metadata start_timestamp does not match bars")
+        if self.bars[-1].timestamp != self.metadata.end_timestamp:
+            raise DomainValidationError("market-data metadata end_timestamp does not match bars")
+        for bar in self.bars:
+            if bar.symbol != self.metadata.symbol:
+                raise DomainValidationError("market-data metadata symbol does not match bars")
+            if bar.timeframe_seconds != self.metadata.timeframe_seconds:
+                raise DomainValidationError("market-data metadata timeframe does not match bars")
 
 
 @dataclass(frozen=True)
@@ -234,8 +403,17 @@ class Signal:
     strategy_name: str
 
     def __post_init__(self) -> None:
-        if not isfinite(self.target_weight) or not 0 <= self.target_weight <= 1:
+        if not _is_finite_number(self.target_weight) or not 0 <= self.target_weight <= 1:
             raise DomainValidationError("target_weight must be finite and between 0 and 1")
+        if not isinstance(self.strategy_name, str):
+            raise DomainValidationError("signal strategy_name must be a string")
+        normalized_symbol = normalize_symbol(self.symbol, field_name="signal symbol")
+        normalized_strategy = self.strategy_name.strip()
+        if not normalized_strategy:
+            raise DomainValidationError("signal strategy_name must be non-empty")
+        object.__setattr__(self, "timestamp", normalize_timestamp_utc(self.timestamp))
+        object.__setattr__(self, "symbol", normalized_symbol)
+        object.__setattr__(self, "strategy_name", normalized_strategy)
 
 
 class Strategy(Protocol):
@@ -244,6 +422,10 @@ class Strategy(Protocol):
     @property
     def name(self) -> str:
         """Return a stable strategy name."""
+
+    @property
+    def configuration(self) -> tuple[tuple[str, str | int | float | bool], ...]:
+        """Return stable primitive parameters used for reproducibility."""
 
     def signal_for_history(self, history: Sequence[MarketBar]) -> Signal:
         """Return a target using only the supplied historical prefix."""
@@ -297,6 +479,7 @@ class OrderIntent:
     estimated_execution_price: float
     estimated_fee: float
     target_weight: float
+    execution_phase: ExecutionPhase = ExecutionPhase.OPEN
 
     @property
     def notional(self) -> float:
@@ -310,6 +493,7 @@ class Fill:
     """Approved simulated execution."""
 
     intent_id: str
+    fill_id: str
     timestamp: datetime
     symbol: str
     side: OrderSide
@@ -318,6 +502,7 @@ class Fill:
     execution_price: float
     fee: float
     slippage_cost: float
+    execution_phase: ExecutionPhase = ExecutionPhase.OPEN
 
 
 @dataclass(frozen=True)
@@ -325,8 +510,11 @@ class Trade:
     """Completed simulated position change with accounting impact."""
 
     fill: Fill
+    signal_timestamp: datetime
     average_cost_after: float
     realized_pnl_delta: float
+    resulting_cash: float
+    resulting_quantity: float
     target_weight: float
 
     @property
@@ -403,6 +591,9 @@ class EquityPoint:
     average_cost: float
     position_market_value: float
     equity: float
+    start_of_day_equity: float
+    daily_pnl: float
+    peak_equity: float
     exposure_pct: float
     realized_pnl: float
     unrealized_pnl: float
@@ -477,6 +668,17 @@ class BenchmarkResult:
     ending_equity: float
     total_return: float
     max_drawdown: float
+    total_fees_paid: float
+    estimated_slippage_cost: float
+    average_exposure: float
+    max_exposure: float
+    ending_position_open: bool
+    quantity: float
+    purchase_timestamp: datetime | None
+    purchase_reference_price: float | None
+    purchase_execution_price: float | None
+    fractional_quantity_supported: bool
+    methodology: str
 
     @property
     def start_date(self) -> str:
@@ -501,8 +703,11 @@ class BacktestResult:
 
     session_id: str
     strategy_name: str
+    strategy_configuration: tuple[tuple[str, str | int | float | bool], ...]
     symbol: str
     input_metadata: MarketDataMetadata
+    assumptions: BacktestConfig
+    risk_configuration: RiskConfiguration
     summary: BacktestSummary
     benchmarks: BenchmarkComparison
     equity_curve: tuple[EquityPoint, ...]
@@ -583,7 +788,54 @@ class PaperSessionSummary:
     bars_processed: int
     total_bars: int
     replay_speed_seconds: float
+    random_seed: int
     strategy_name: str
+    strategy_configuration: tuple[tuple[str, str | int | float | bool], ...]
     engine_version: str
+    input_metadata: MarketDataMetadata
+    assumptions: BacktestConfig
+    risk_configuration: RiskConfiguration
+    start_event_timestamp: datetime | None
+    end_event_timestamp: datetime | None
+    halt_reasons: tuple[RiskReason, ...]
+    failure_reason: str | None
+    warnings: tuple[DataWarning, ...]
     transitions: tuple[SessionTransition, ...]
-    result: BacktestResult
+    result: BacktestResult | None
+
+
+def normalize_symbol(value: object, *, field_name: str = "symbol") -> str:
+    """Return an uppercase symbol safe for reports and spreadsheet exports."""
+
+    if not isinstance(value, str):
+        raise DomainValidationError(f"{field_name} must be a string")
+    normalized = value.strip().upper()
+    if fullmatch(r"[A-Z0-9][A-Z0-9._:-]{0,31}", normalized) is None:
+        raise DomainValidationError(
+            f"{field_name} must use 1-32 letters, digits, dot, underscore, colon, or hyphen"
+        )
+    return normalized
+
+
+def _require_positive(value: float, name: str) -> None:
+    if not _is_finite_number(value) or value <= 0:
+        raise ValueError(f"{name} must be positive and finite")
+
+
+def _require_non_negative(value: float, name: str) -> None:
+    if not _is_finite_number(value) or value < 0:
+        raise ValueError(f"{name} must be non-negative and finite")
+
+
+def _require_fraction(value: float, name: str) -> None:
+    if not _is_finite_number(value) or not 0 <= value <= 1:
+        raise ValueError(f"{name} must be finite and between 0 and 1")
+
+
+def _require_int_at_least(value: int, name: str, *, minimum: int) -> None:
+    if type(value) is not int or value < minimum:
+        raise ValueError(f"{name} must be an integer greater than or equal to {minimum}")
+
+
+def _is_finite_number(value: object) -> bool:
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and isfinite(value)

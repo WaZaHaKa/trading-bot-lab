@@ -1,0 +1,19 @@
+{
+  "accepted_candidate_provenance": [
+    "lean_engine_observation",
+    "contract_fixture_not_engine_observation"
+  ],
+  "contract_name": "trading_bot_lab_cross_engine_parity",
+  "contract_version": "1.0.0",
+  "execution_timing": "next_bar_open",
+  "local_oracle_provenance": "local_python_oracle_observation",
+  "numeric_representation": "canonical_decimal_string",
+  "scenario_manifest_version": "1.0.0",
+  "tolerances": {
+    "money": "0.01",
+    "price": "0.00000001",
+    "quantity": "0",
+    "ratio": "0.0000001"
+  },
+  "trace_schema_version": "1.0.0"
+}

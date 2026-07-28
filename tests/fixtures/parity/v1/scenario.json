@@ -1,0 +1,57 @@
+{
+  "assumptions": {
+    "data_age_seconds": 0,
+    "execution_timing": "next_bar_open",
+    "fee_bps": "1",
+    "fee_model": "notional_bps",
+    "initial_cash": "100000",
+    "kill_switch_active": false,
+    "max_daily_loss_pct": "0.02",
+    "max_drawdown_pct": "0.05",
+    "max_open_positions": 1,
+    "max_order_notional_pct": "0.1",
+    "max_position_pct": "0.1",
+    "max_total_exposure_pct": "0.3",
+    "minimum_fee": "0",
+    "money_precision": 8,
+    "quantity_precision": 0,
+    "slippage_bps": "2",
+    "slippage_model": "adverse_bps",
+    "strategy_history_limit": 100,
+    "trading_enabled": true,
+    "warmup_bars": 0
+  },
+  "expected": {
+    "bar_count": 8,
+    "fill_count": 2,
+    "final_bar_creates_fill": false,
+    "final_bar_creates_intent": false,
+    "final_target_weight": "0.1",
+    "risk_rejection_count": 0
+  },
+  "fixture": "synthetic_weekdays.csv",
+  "fixture_sha256": "a68bcf7fc30d2593b32e5a98852c4f8e0190ed99865640485b344515d9f1f78a",
+  "risk": {
+    "allow_leverage": false,
+    "allow_live_trading": false,
+    "allow_shorting": false,
+    "allowed_symbols": ["PARITY"],
+    "max_asset_weight": "0.1",
+    "max_data_age_seconds": 300,
+    "max_daily_loss_pct": "0.02",
+    "max_drawdown_pct": "0.05",
+    "max_open_positions": 1,
+    "max_order_notional_weight": "0.1",
+    "max_total_gross_exposure": "0.3"
+  },
+  "scenario_id": "weekday_ma_next_open_v1",
+  "scenario_manifest_version": "1.0.0",
+  "strategy": {
+    "fast_window": 2,
+    "name": "moving_average",
+    "slow_window": 3,
+    "target_weight": "0.1"
+  },
+  "symbol": "PARITY",
+  "timeframe_seconds": 86400
+}

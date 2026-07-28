@@ -2,6 +2,10 @@
 
 Deployment is intentionally out of scope for the starter repo.
 
+QuantConnect cloud **backtesting** is an active research workflow. It is not a
+live deployment and grants no authority to configure a brokerage or real order
+route.
+
 ## Allowed now
 
 - Local development.
@@ -9,12 +13,13 @@ Deployment is intentionally out of scope for the starter repo.
 - Local backtesting.
 - Local historical CSV paper replay.
 - Local research notebooks.
+- Two manually named, project-scoped LEAN cloud backtests after preflight.
 
 Historical replay is not a deployment and has no external API or broker account.
 
 ## Not allowed yet
 
-- Cloud deployment.
+- Cloud live deployment or unattended cloud execution.
 - Kubernetes.
 - Production brokers.
 - Live exchange API keys.

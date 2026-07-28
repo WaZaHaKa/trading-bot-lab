@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from math import isfinite
+
 import pytest
 
 from trading_bot_lab.domain import RiskReason, RiskStatus
@@ -121,26 +123,76 @@ def test_non_positive_quantity_fails_closed() -> None:
 def test_available_cash_check_includes_execution_cost_and_fee() -> None:
     decision = evaluate_order(
         RiskPolicy(),
-        base_order(cash_required=5_001, available_cash=5_000),
-        base_portfolio(cash=5_000),
+        base_order(
+            estimated_fee=1,
+            cash_required=5_001,
+            available_cash=5_000,
+        ),
+        base_portfolio(
+            cash=5_000,
+            equity=5_000,
+            start_of_day_equity=5_000,
+            peak_equity=5_000,
+        ),
     )
 
     assert RiskReason.INSUFFICIENT_CASH in decision.reasons
 
 
 @pytest.mark.parametrize(
-    ("order", "reason"),
+    ("order", "portfolio", "reason"),
     [
-        (base_order(notional=10_001), RiskReason.MAX_ORDER_NOTIONAL),
-        (base_order(resulting_symbol_exposure=10_001), RiskReason.MAX_POSITION),
         (
-            base_order(resulting_total_gross_exposure=30_001),
+            base_order(
+                quantity=100.01,
+                notional=10_001,
+                cash_required=10_001,
+                resulting_symbol_exposure=10_001,
+                resulting_total_gross_exposure=10_001,
+                resulting_quantity=100.01,
+            ),
+            base_portfolio(),
+            RiskReason.MAX_ORDER_NOTIONAL,
+        ),
+        (
+            base_order(
+                quantity=20,
+                notional=2_000,
+                cash_required=2_000,
+                current_quantity=90,
+                current_symbol_exposure=9_000,
+                current_total_gross_exposure=9_000,
+                resulting_symbol_exposure=11_000,
+                resulting_total_gross_exposure=11_000,
+                resulting_quantity=110,
+                open_positions=1,
+                available_cash=91_000,
+            ),
+            base_portfolio(cash=91_000, open_positions=1),
+            RiskReason.MAX_POSITION,
+        ),
+        (
+            base_order(
+                current_quantity=260,
+                current_symbol_exposure=26_000,
+                current_total_gross_exposure=26_000,
+                resulting_symbol_exposure=31_000,
+                resulting_total_gross_exposure=31_000,
+                resulting_quantity=310,
+                open_positions=1,
+                available_cash=74_000,
+            ),
+            base_portfolio(cash=74_000, open_positions=1),
             RiskReason.MAX_TOTAL_EXPOSURE,
         ),
     ],
 )
-def test_notional_and_exposure_caps_reject(order: OrderRequest, reason: RiskReason) -> None:
-    decision = evaluate_order(RiskPolicy(), order, base_portfolio())
+def test_notional_and_exposure_caps_reject(
+    order: OrderRequest,
+    portfolio: PortfolioSnapshot,
+    reason: RiskReason,
+) -> None:
+    decision = evaluate_order(RiskPolicy(), order, portfolio)
 
     assert reason in decision.reasons
 
@@ -210,21 +262,64 @@ def test_daily_loss_and_drawdown_reject_at_threshold() -> None:
     assert drawdown.metrics["drawdown_pct"] == 0.05
 
 
+def test_daily_pnl_is_derived_and_inconsistent_snapshot_fails_closed() -> None:
+    decision = evaluate_portfolio_halt(
+        RiskPolicy(max_daily_loss_pct=0.02, max_drawdown_pct=0.05),
+        base_portfolio(equity=98_000, daily_pnl=0),
+    )
+
+    assert RiskReason.INVALID_PORTFOLIO in decision.reasons
+    assert RiskReason.DAILY_LOSS in decision.reasons
+    assert decision.metrics["daily_loss_pct"] == 0.02
+
+
 def test_risk_reducing_order_can_reduce_an_existing_overweight_position() -> None:
     decision = evaluate_order(
         RiskPolicy(max_asset_weight=0.10, max_total_gross_exposure=0.10),
         base_order(
             side="sell",
+            cash_required=None,
+            current_quantity=200,
             current_symbol_exposure=20_000,
+            current_total_gross_exposure=20_000,
             resulting_symbol_exposure=15_000,
             resulting_total_gross_exposure=15_000,
             resulting_quantity=150,
+            open_positions=1,
+            available_cash=80_000,
             reduces_risk=True,
         ),
-        base_portfolio(open_positions=1),
+        base_portfolio(cash=80_000, open_positions=1),
     )
 
     assert decision.approved
+
+
+def test_multi_position_total_exposure_is_used_to_derive_risk_reduction() -> None:
+    decision = evaluate_order(
+        RiskPolicy(
+            max_asset_weight=0.10,
+            max_total_gross_exposure=0.10,
+            max_open_positions=2,
+        ),
+        base_order(
+            side="sell",
+            cash_required=None,
+            available_cash=70_000,
+            current_quantity=200,
+            current_symbol_exposure=20_000,
+            current_total_gross_exposure=30_000,
+            resulting_symbol_exposure=15_000,
+            resulting_total_gross_exposure=25_000,
+            resulting_quantity=150,
+            open_positions=2,
+            reduces_risk=True,
+        ),
+        base_portfolio(cash=70_000, open_positions=2),
+    )
+
+    assert decision.approved
+    assert decision.metrics["reduces_risk"] == 1
 
 
 def test_risk_reducing_order_still_cannot_bypass_staleness_or_halt() -> None:
@@ -232,17 +327,156 @@ def test_risk_reducing_order_still_cannot_bypass_staleness_or_halt() -> None:
         RiskPolicy(max_data_age_seconds=300),
         base_order(
             side="sell",
+            cash_required=None,
             data_age_seconds=301,
+            current_quantity=100,
             current_symbol_exposure=10_000,
+            current_total_gross_exposure=10_000,
             resulting_symbol_exposure=5_000,
             resulting_total_gross_exposure=5_000,
+            resulting_quantity=50,
+            open_positions=1,
+            available_cash=90_000,
             reduces_risk=True,
         ),
-        base_portfolio(halted=True),
+        base_portfolio(cash=90_000, halted=True, open_positions=1),
     )
 
     assert RiskReason.STALE_DATA in decision.reasons
     assert RiskReason.HALTED in decision.reasons
+
+
+def test_caller_cannot_label_an_oversized_buy_as_risk_reducing() -> None:
+    decision = evaluate_order(
+        RiskPolicy(),
+        base_order(
+            quantity=200,
+            notional=20_000,
+            cash_required=20_000,
+            resulting_symbol_exposure=20_000,
+            resulting_total_gross_exposure=20_000,
+            resulting_quantity=200,
+            reduces_risk=True,
+        ),
+        base_portfolio(),
+    )
+
+    assert RiskReason.INVALID_ORDER in decision.reasons
+    assert RiskReason.MAX_ORDER_NOTIONAL in decision.reasons
+    assert RiskReason.MAX_POSITION in decision.reasons
+
+
+def test_inconsistent_projected_position_fails_closed() -> None:
+    decision = evaluate_order(
+        RiskPolicy(),
+        base_order(resulting_quantity=1, resulting_symbol_exposure=100),
+        base_portfolio(),
+    )
+
+    assert decision.reasons == (RiskReason.INVALID_ORDER,)
+
+
+def test_missing_or_inconsistent_authoritative_cash_fails_closed() -> None:
+    missing = evaluate_order(RiskPolicy(), base_order(), base_portfolio(cash=None))
+    inconsistent = evaluate_order(
+        RiskPolicy(),
+        base_order(available_cash=99_000),
+        base_portfolio(cash=100_000),
+    )
+
+    assert RiskReason.INVALID_PORTFOLIO in missing.reasons
+    assert RiskReason.INVALID_PORTFOLIO in inconsistent.reasons
+
+
+def test_sell_fee_that_would_make_cash_negative_is_rejected() -> None:
+    decision = evaluate_order(
+        RiskPolicy(
+            max_asset_weight=1.0,
+            max_total_gross_exposure=1.0,
+            max_daily_loss_pct=1.0,
+            max_drawdown_pct=1.0,
+        ),
+        base_order(
+            side="sell",
+            quantity=50,
+            notional=5_000,
+            estimated_fee=20_000,
+            cash_required=None,
+            available_cash=0,
+            current_quantity=100,
+            current_symbol_exposure=10_000,
+            current_total_gross_exposure=10_000,
+            resulting_symbol_exposure=5_000,
+            resulting_total_gross_exposure=5_000,
+            resulting_quantity=50,
+            open_positions=1,
+            reduces_risk=True,
+        ),
+        base_portfolio(
+            cash=0,
+            equity=10_000,
+            start_of_day_equity=10_000,
+            peak_equity=10_000,
+            open_positions=1,
+        ),
+    )
+
+    assert RiskReason.INSUFFICIENT_CASH in decision.reasons
+    assert RiskReason.PROJECTED_EQUITY_NON_POSITIVE in decision.reasons
+
+
+def test_non_finite_projected_quantity_is_typed_rejection() -> None:
+    decision = evaluate_order(
+        RiskPolicy(),
+        base_order(
+            resulting_quantity=float("nan"),
+            resulting_symbol_exposure=float("nan"),
+        ),
+        base_portfolio(),
+    )
+
+    assert RiskReason.INVALID_QUANTITY in decision.reasons
+    assert RiskReason.INVALID_ORDER in decision.reasons
+
+
+def test_derived_arithmetic_overflow_rejects_without_infinite_metrics() -> None:
+    decision = evaluate_order(
+        RiskPolicy(
+            max_asset_weight=1.0,
+            max_total_gross_exposure=1.0,
+            max_order_notional_weight=1.0,
+            max_daily_loss_pct=1.0,
+            max_drawdown_pct=1.0,
+        ),
+        base_order(
+            side="sell",
+            quantity=1e308,
+            reference_price=10,
+            execution_price=10,
+            notional=1e308,
+            cash_required=None,
+            available_cash=0,
+            current_quantity=1e308,
+            current_symbol_exposure=1e308,
+            current_total_gross_exposure=1e308,
+            resulting_symbol_exposure=0,
+            resulting_total_gross_exposure=0,
+            resulting_quantity=0,
+            open_positions=1,
+            reduces_risk=True,
+        ),
+        base_portfolio(
+            cash=0,
+            equity=1e308,
+            start_of_day_equity=1e308,
+            peak_equity=1e308,
+            open_positions=1,
+        ),
+    )
+
+    assert RiskReason.ORDER_NOTIONAL_NON_FINITE in decision.reasons
+    assert not decision.approved
+    assert all(isfinite(value) for value in decision.metrics.values())
 
 
 @pytest.mark.parametrize(
@@ -282,3 +516,9 @@ def test_policy_rejects_invalid_limits_and_symbol_configuration() -> None:
         RiskPolicy(allowed_symbols=("SPY", "spy"))
     with pytest.raises(ValueError, match="max_open_positions"):
         RiskPolicy(max_open_positions=0)
+    with pytest.raises(ValueError, match="must be a bool"):
+        RiskPolicy(allow_live_trading=1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="finite"):
+        RiskPolicy(max_asset_weight=float("nan"))
+    with pytest.raises(ValueError, match="non-negative integer"):
+        RiskPolicy(max_data_age_seconds=True)

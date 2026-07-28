@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Superseded by ADR 0008 on 2026-07-28.
 
 ## Context
 
@@ -11,6 +11,9 @@ A trading repository may contain strategy IP, research notebooks, logs, configur
 ## Decision
 
 Keep the repository private while researching and building.
+
+This was the initial decision. The repository is now public; the original risk
+analysis remains relevant, but privacy can no longer be treated as a control.
 
 ## Consequences
 

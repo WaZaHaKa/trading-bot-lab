@@ -3,7 +3,7 @@
 ```text
 Read AGENTS.md first and obey it.
 
-We are in the private repository trading-bot-lab.
+We are in the public repository trading-bot-lab. Treat every tracked value as public.
 
 Goal:
 Verify the free local Python CSV backtesting workflow.

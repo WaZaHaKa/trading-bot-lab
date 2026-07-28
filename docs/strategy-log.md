@@ -594,3 +594,46 @@ paper-trading, or live-trading approval.
 A future retry requires separate authorization and must first correct and test
 the LEAN exit-risk valuation snapshot without changing the v1 expected values or
 tolerances.
+
+## 2026-07-28 - Open-phase LEAN risk snapshot correction
+
+### Hypothesis
+
+The three failed exit-decision ratios came only from LEAN's cached aggregate
+portfolio value carrying the current row close into an execution-open decision.
+Explicit cash plus quantity times the validated row open should remove that
+contamination without changing intent, fill, position, fees, accounting, risk
+thresholds, or comparator tolerances.
+
+### Implementation
+
+The LEAN adapter now creates one typed timestamp-bound snapshot before pending
+execution. It money-rounds open exposure and equity with the existing
+eight-place half-even contract, retains the previous completed close as
+start-of-day equity, updates the peak at the open, and derives loss, drawdown,
+and order weight from that state. Close-phase aggregate accounting remains
+separate. The cumulative runtime ceiling is seven: five retained historical
+executions plus at most two in authorization batch
+`open-phase-risk-correction-1`; the one-pull ceiling is unchanged.
+
+### Validation
+
+Focused offline unit and real-comparator regressions pass. They reproduce the
+three historical close-mark values exactly, put the corrected open-mark values
+within the unchanged ratio tolerance, preserve buy and projected-state behavior,
+exercise actual `on_data` snapshot ordering, and keep the historical failed
+record byte-pinned. The full local gate and both Ubuntu and Windows CI remain
+mandatory before any genuine rerun.
+
+### Decision
+
+This is a tested implementation correction, not new LEAN evidence. Preserve
+`contracts/lean-local-parity/v1/2026-07-28.json` unchanged and keep overall
+genuine parity failed until a newly authorized run compares all sixteen
+dimensions.
+
+### Notes
+
+No LEAN execution, image pull, cloud command, Object Store operation, external
+market-data request, broker connection, optimization, or live deployment
+occurred while implementing this correction.

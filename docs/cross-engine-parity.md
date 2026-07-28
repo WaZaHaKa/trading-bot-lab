@@ -178,9 +178,11 @@ an engine container, or a parity claim.
 The realized engine container is validated before start with no network,
 published ports, privilege, host namespaces, Docker socket, credentials, or
 mounts beyond the exact temporary project, data, output, and CLI paths.
-One ignored state file permits only the authorized pull and at most five
-serialized executions. Raw logs, runtime audits, normalized traces, comparison
-output, and engine results remain ignored.
+One ignored state file permits only the authorized pull and at most seven
+cumulative serialized executions. The first five remain permanent history; the
+open-phase-risk-correction-1 batch authorizes at most two additional runs and
+does not authorize another pull. Raw logs, runtime audits, normalized traces,
+comparison output, and engine results remain ignored.
 
 For a later, separately authorized cloud run, the operator must first place the
 same exact fixture bytes at the fixed Object Store key using an explicitly
@@ -204,6 +206,13 @@ exit, but `daily_loss_pct`, `drawdown_pct`, and `order_weight` exceeded the fixe
 ratio tolerance. Execution-timing parity is therefore `passed`; numerical
 accounting/risk parity and the overall genuine-local result are `failed`. No
 profitability or strategy-quality claim follows from this validation run.
+
+The LEAN adapter now builds its pre-trade risk snapshot explicitly from
+pre-fill cash, quantity, and the timestamp-matched execution open. Offline
+regressions reproduce the old close-mark ratios and place the corrected open
+ratios within the unchanged contract tolerance. This implementation result is
+not a genuine LEAN observation: the historical failed record remains unchanged,
+and overall parity remains failed until a gated rerun passes all dimensions.
 
 ## Failure rule
 

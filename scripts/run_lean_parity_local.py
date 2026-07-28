@@ -361,9 +361,10 @@ def _inspect_mutable_discovery(environment: Mapping[str, str]) -> dict[str, obje
 
 
 def pull_image(authorization: str | None) -> None:
-    """Perform the one authorized immutable rootless image pull."""
+    """Reject this batch's pull phase before preflight or registry access."""
 
     require_authorization(authorization, PULL_AUTHORIZATION, action="image pull")
+    increment_pull(load_runtime_state(STATE_PATH))
     perform_preflight()
     with ExclusiveRunLock(LOCK_PATH):
         state = load_runtime_state(STATE_PATH)

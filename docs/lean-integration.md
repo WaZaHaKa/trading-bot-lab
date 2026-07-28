@@ -237,8 +237,10 @@ prevents an implicit image pull or bridge network, and validates the realized
 container before starting it. The engine has `network_mode=none`, no published
 ports, no host namespace, no Docker socket or credential mount, all capabilities
 dropped, `no-new-privileges`, and bounded memory, CPU, and process count.
-Ignored state permits one pull and at most five executions, rejects parallel
-runs, and cleanup requires a current-run sentinel. Windows can validate the
+Ignored state permits one pull and at most seven cumulative executions, rejects
+parallel runs, and cleanup requires a current-run sentinel. The first five are
+retained history; authorization batch open-phase-risk-correction-1 permits at
+most two additional runs and no image pull. Windows can validate the
 contract but intentionally refuses Linux Docker execution.
 
 LEAN must emit exactly one bounded message prefixed
@@ -260,8 +262,13 @@ dimensions passed. Execution timing is `passed`; numerical accounting/risk and
 overall parity are `failed` because three exit-decision risk ratios used a
 current-row-close LEAN portfolio snapshot rather than the eligible open snapshot.
 The closed sanitized record is
-`contracts/lean-local-parity/v1/2026-07-28.json`. The five-execution bound is
-exhausted, and no Object Store or cloud parity operation occurred.
+`contracts/lean-local-parity/v1/2026-07-28.json`; it remains immutable historical
+evidence. The adapter now values the pre-fill risk snapshot from timestamp-bound
+cash, quantity, and execution-open state instead of LEAN's cached aggregate
+portfolio value. Focused offline regressions pass without changing expected
+values or tolerances, but this is not new engine evidence. The first additional
+genuine run remains gated on complete local validation and passing Ubuntu and
+Windows CI. No Object Store or cloud parity operation occurred.
 
 See `windows-lean-setup.md`, `qcc-guardrails.md`,
 `execution-timing-comparison.md`, `risk-policy-mapping.md`, and

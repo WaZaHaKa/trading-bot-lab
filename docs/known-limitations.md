@@ -37,6 +37,10 @@
   risk snapshot at the current row close rather than the next-bar open used by
   the local oracle, so three risk ratios exceeded tolerance even though both
   engines approved the risk-reducing exit.
+- The adapter now constructs the open-phase risk snapshot explicitly, and
+  offline regressions reproduce and eliminate the close-mark mismatch. No
+  corrected genuine LEAN observation exists yet, so the historical failed
+  classification remains authoritative.
 - Observation extraction validates canonical structure, content binding, and
   the claimed engine/provenance state; it is not cryptographic runtime
   attestation. The operator must preserve and review the actual ignored LEAN
@@ -61,7 +65,9 @@
 Cloud and local backtests are hypothetical, place no real orders, are not
 financial advice, and do not predict future results.
 
-The next safe milestone is a separately authorized correction of the LEAN
-exit-risk valuation snapshot, regression validation, and a fresh bounded genuine
-comparison. The current five-execution authorization is exhausted. Any
-walk-forward work remains subsequent and separately reviewed.
+The next safe milestone is complete local validation, passing Ubuntu and Windows
+CI for the correction commit, and then one authorized genuine comparison. The
+five prior executions remain permanent history; batch
+`open-phase-risk-correction-1` permits at most two additional executions and a
+maximum cumulative count of seven, with no image pull. Any walk-forward work
+remains subsequent and separately reviewed.

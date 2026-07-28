@@ -42,7 +42,10 @@ NORMALIZED_BARS_SHA256 = "02394c31af7b982493bcbdadd92735d7a0ee6ae04e3d38b7e3e3a5
 SYMBOL = "PARITY"
 TIMEFRAME_SECONDS = 86_400
 EXECUTION_MODEL = "next_bar_open"
-MAX_EXECUTIONS = 5
+AUTHORIZATION_BATCH_ID = "open-phase-risk-correction-1"
+PRIOR_CUMULATIVE_EXECUTIONS = 5
+MAX_BATCH_EXECUTIONS = 2
+MAX_EXECUTIONS = PRIOR_CUMULATIVE_EXECUTIONS + MAX_BATCH_EXECUTIONS
 
 PINNED_IMAGE_UNAVAILABLE = "PINNED_IMAGE_UNAVAILABLE"
 PINNED_PLATFORM_MANIFEST_MISMATCH = "PINNED_PLATFORM_MANIFEST_MISMATCH"
@@ -855,19 +858,22 @@ def write_runtime_state(path: Path, state: RuntimeState) -> None:
 
 
 def increment_execution(state: RuntimeState) -> RuntimeState:
-    """Count one launched LEAN execution and reject attempts beyond five."""
+    """Count one launched LEAN execution and reject attempts beyond seven."""
 
+    if state.executions < PRIOR_CUMULATIVE_EXECUTIONS or state.pulls != 1:
+        raise LeanRuntimeError(
+            "preserved runtime history must contain five executions and one pull"
+        )
     if state.executions >= MAX_EXECUTIONS:
         raise LeanRuntimeError("maximum authorized LEAN parity execution count reached")
     return RuntimeState(executions=state.executions + 1, pulls=state.pulls)
 
 
 def increment_pull(state: RuntimeState) -> RuntimeState:
-    """Count the one authorized image pull."""
+    """Reject pulls because the correction batch is cached-image-only."""
 
-    if state.pulls >= 1:
-        raise LeanRuntimeError("authorized image pull has already been consumed")
-    return RuntimeState(executions=state.executions, pulls=state.pulls + 1)
+    del state
+    raise LeanRuntimeError("no image pull is authorized for the correction batch")
 
 
 class ExclusiveRunLock:
@@ -1138,6 +1144,7 @@ def public_contract_summary() -> dict[str, object]:
 
 
 __all__ = [
+    "AUTHORIZATION_BATCH_ID",
     "COMPARE_AUTHORIZATION",
     "EXECUTION_MODEL",
     "ExclusiveRunLock",
@@ -1146,6 +1153,7 @@ __all__ = [
     "FIXTURE_SHA256",
     "LeanRuntimeError",
     "LocalImageIdentity",
+    "MAX_BATCH_EXECUTIONS",
     "MAX_EXECUTIONS",
     "MUTABLE_DISCOVERY_IMAGE",
     "NORMALIZED_BARS_SHA256",
@@ -1156,6 +1164,7 @@ __all__ = [
     "PLATFORM_MANIFEST_DIGEST",
     "PREPARE_AUTHORIZATION",
     "LEAN_CLI_NETWORK",
+    "PRIOR_CUMULATIVE_EXECUTIONS",
     "PULL_AUTHORIZATION",
     "ROOTLESS_HOST",
     "ROOTLESS_SOCKET",

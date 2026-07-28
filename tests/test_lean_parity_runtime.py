@@ -8,18 +8,20 @@ import pytest
 
 from scripts import run_lean_parity_local as operator
 from trading_bot_lab.lean_runtime import (
+    AUTHORIZATION_BATCH_ID,
     COMPARE_AUTHORIZATION,
     EXPECTED_CLI_VERSION,
     FIXTURE_SHA256,
     LEAN_CLI_NETWORK,
+    MAX_BATCH_EXECUTIONS,
     MAX_EXECUTIONS,
-    MUTABLE_DISCOVERY_IMAGE,
     OCI_INDEX_DIGEST,
     PINNED_IMAGE,
     PINNED_IMAGE_UNAVAILABLE,
     PINNED_PLATFORM_MANIFEST_MISMATCH,
     PLATFORM_MANIFEST_DIGEST,
     PREPARE_AUTHORIZATION,
+    PRIOR_CUMULATIVE_EXECUTIONS,
     PULL_AUTHORIZATION,
     ROOTLESS_HOST,
     RUN_AUTHORIZATION,
@@ -300,97 +302,24 @@ def test_operator_rejects_pull_and_run_before_preflight_without_authorization(
     assert called is False
 
 
-def test_pull_validates_pinned_digest_and_records_latest_as_non_authoritative(
+def test_current_batch_rejects_pull_before_preflight_or_registry_access(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    commands: list[tuple[str, ...]] = []
-    pull_commands: list[tuple[str, ...]] = []
-    record: dict[str, object] = {}
-    log_directory = tmp_path / "logs"
-
-    monkeypatch.setattr(operator, "LOG_DIRECTORY", log_directory)
+    calls: list[str] = []
+    monkeypatch.setattr(operator, "STATE_PATH", tmp_path / "missing-state.json")
+    monkeypatch.setattr(operator, "perform_preflight", lambda: calls.append("preflight"))
+    monkeypatch.setattr(operator, "_run", lambda *args, **kwargs: calls.append("registry"))
     monkeypatch.setattr(
-        operator,
-        "ANONYMOUS_REGISTRY_DIRECTORY",
-        log_directory / "anonymous-registry-v1",
-    )
-    monkeypatch.setattr(operator, "STATE_PATH", log_directory / "state.json")
-    monkeypatch.setattr(operator, "LOCK_PATH", log_directory / "runtime.lock")
-    monkeypatch.setattr(operator, "PULL_LOG_PATH", log_directory / "pull.log")
-    monkeypatch.setattr(operator, "IMAGE_RECORD_PATH", tmp_path / "image.json")
-    monkeypatch.setattr(operator, "perform_preflight", lambda: None)
-    monkeypatch.setattr(operator, "_assert_git_ignored", lambda path: None)
-    monkeypatch.setattr(
-        operator,
-        "_inspect_local_image",
-        lambda: {"completion_status": "verified"},
-    )
-    monkeypatch.setattr(
-        operator,
-        "_write_public_json",
-        lambda path, payload: record.update(payload),
+        operator.subprocess,
+        "run",
+        lambda *args, **kwargs: calls.append("pull"),
     )
 
-    def fake_run(
-        command: tuple[str, ...],
-        **kwargs: object,
-    ) -> subprocess.CompletedProcess[str]:
-        del kwargs
-        selected = tuple(command)
-        commands.append(selected)
-        if selected[-1] == PINNED_IMAGE:
-            output = pinned_registry_output()
-        elif selected[-1] == MUTABLE_DISCOVERY_IMAGE:
-            output = moved_latest_output()
-        else:
-            raise AssertionError(f"unexpected Docker command: {selected!r}")
-        return subprocess.CompletedProcess(selected, 0, output, "")
+    with pytest.raises(LeanRuntimeError, match="no image pull is authorized"):
+        operator.pull_image(PULL_AUTHORIZATION)
 
-    def fake_subprocess_run(
-        command: tuple[str, ...],
-        **kwargs: object,
-    ) -> subprocess.CompletedProcess[str]:
-        environment = kwargs.get("env")
-        assert isinstance(environment, dict)
-        assert environment["DOCKER_HOST"] == ROOTLESS_HOST
-        assert environment["DOCKER_CONFIG"] == str(operator.ANONYMOUS_REGISTRY_DIRECTORY)
-        selected = tuple(command)
-        pull_commands.append(selected)
-        return subprocess.CompletedProcess(selected, 0, "", "")
-
-    monkeypatch.setattr(operator, "_run", fake_run)
-    monkeypatch.setattr(operator.subprocess, "run", fake_subprocess_run)
-
-    operator.pull_image(PULL_AUTHORIZATION)
-
-    assert [command[-1] for command in commands] == [
-        PINNED_IMAGE,
-        MUTABLE_DISCOVERY_IMAGE,
-    ]
-    assert pull_commands == [
-        (
-            "docker",
-            "--host",
-            ROOTLESS_HOST,
-            "image",
-            "pull",
-            "--platform",
-            "linux/amd64",
-            PINNED_IMAGE,
-        )
-    ]
-    assert MUTABLE_DISCOVERY_IMAGE not in pull_commands[0]
-    assert record["immutable_registry_identity"]["authoritative"] is True
-    assert record["mutable_discovery"] == {
-        "authoritative": False,
-        "completion_status": "observed",
-        "index_digest": MOVED_LATEST_INDEX,
-        "platform": "linux/amd64",
-        "platform_manifest_digest": MOVED_LATEST_AMD64,
-        "reference": MUTABLE_DISCOVERY_IMAGE,
-    }
-    assert not operator.ANONYMOUS_REGISTRY_DIRECTORY.exists()
+    assert calls == []
 
 
 def test_unavailable_pinned_registry_identity_blocks_before_pull(
@@ -405,15 +334,28 @@ def test_unavailable_pinned_registry_identity_blocks_before_pull(
         operator._inspect_pinned_registry({})
 
 
-def test_bounded_state_allows_one_pull_and_five_executions(tmp_path: Path) -> None:
-    state = increment_pull(RuntimeState())
-    for expected in range(1, MAX_EXECUTIONS + 1):
+def test_bounded_state_only_continues_preserved_history_to_seven(tmp_path: Path) -> None:
+    assert AUTHORIZATION_BATCH_ID == "open-phase-risk-correction-1"
+    assert PRIOR_CUMULATIVE_EXECUTIONS == 5
+    assert MAX_BATCH_EXECUTIONS == 2
+    assert MAX_EXECUTIONS == 7
+    for reset_state in (
+        RuntimeState(),
+        RuntimeState(executions=4, pulls=1),
+        RuntimeState(executions=5, pulls=0),
+        RuntimeState(executions=6, pulls=0),
+    ):
+        with pytest.raises(LeanRuntimeError, match="preserved runtime history"):
+            increment_execution(reset_state)
+
+    state = RuntimeState(executions=5, pulls=1)
+    for expected in (6, 7):
         state = increment_execution(state)
         assert state.executions == expected
-    with pytest.raises(LeanRuntimeError):
+    with pytest.raises(LeanRuntimeError, match="maximum authorized"):
         increment_execution(state)
-    with pytest.raises(LeanRuntimeError):
-        increment_pull(state)
+    with pytest.raises(LeanRuntimeError, match="no image pull is authorized"):
+        increment_pull(RuntimeState(executions=5, pulls=1))
 
     path = tmp_path / "state.json"
     write_runtime_state(path, state)
@@ -421,6 +363,16 @@ def test_bounded_state_allows_one_pull_and_five_executions(tmp_path: Path) -> No
     write_runtime_state(path, state)
     assert path.read_bytes() == first
     assert load_runtime_state(path) == state
+
+
+def test_new_authorization_batch_continues_cumulative_count_and_stops_at_seven() -> None:
+    state = RuntimeState(executions=5, pulls=1)
+    state = increment_execution(state)
+    assert state == RuntimeState(executions=6, pulls=1)
+    state = increment_execution(state)
+    assert state == RuntimeState(executions=7, pulls=1)
+    with pytest.raises(LeanRuntimeError, match="maximum authorized"):
+        increment_execution(state)
 
 
 @pytest.mark.parametrize(

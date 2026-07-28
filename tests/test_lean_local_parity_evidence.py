@@ -15,6 +15,10 @@ PROJECT = ROOT / "lean-workspace" / "Strategies" / "ParityFixtureV1"
 FIXTURE = ROOT / "tests" / "fixtures" / "parity" / "v1" / "synthetic_weekdays.csv"
 SCENARIO = ROOT / "tests" / "fixtures" / "parity" / "v1" / "scenario.json"
 CONTRACT = ROOT / "contracts" / "parity" / "v1" / "contract.json"
+HISTORICAL_RECORD_SHA256 = "5832d6948bec3e4e672227200bf9e03484e5515afa2c3a14e07682e3200cf6f5"
+HISTORICAL_ALGORITHM_SOURCE_SHA256 = (
+    "55d012866ca83622e433b6b298bbac9f0f7cf1c7254679c1bd653b7b23d1ac6f"
+)
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -36,6 +40,7 @@ def test_local_parity_record_is_deterministic_public_and_content_bound() -> None
     text = RECORD_PATH.read_text(encoding="utf-8")
     record = json.loads(text)
 
+    assert _sha256(RECORD_PATH) == HISTORICAL_RECORD_SHA256
     assert text == json.dumps(record, allow_nan=False, indent=2, sort_keys=True) + "\n"
     _assert_no_float(record)
     assert record["schema_version"] == "1.0.0"
@@ -55,7 +60,7 @@ def test_local_parity_record_is_deterministic_public_and_content_bound() -> None
 
     evidence = record["evidence_sha256"]
     assert all(SHA256_PATTERN.fullmatch(value) for value in evidence.values())
-    assert evidence["algorithm_source_sha256"] == _sha256(PROJECT / "main.py")
+    assert evidence["algorithm_source_sha256"] == HISTORICAL_ALGORITHM_SOURCE_SHA256
     assert evidence["public_configuration_sha256"] == _sha256(PROJECT / "config.json")
     assert evidence["fixture_sha256"] == _sha256(FIXTURE)
     assert evidence["scenario_manifest_sha256"] == _sha256(SCENARIO)

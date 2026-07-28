@@ -118,10 +118,12 @@ the committed fixture hash before any signal or trading logic can run.
 
 ## Observation boundary
 
-One completed LEAN run emits exactly one bounded machine-readable line beginning
-with `TRADING_BOT_LAB_LEAN_PARITY_V1:`. The suffix is compact canonical JSON for
-a v1 `lean_engine_observation`; ordinary human-readable log lines are never
-parsed as parity evidence. The strict extractor rejects missing or duplicate
+One completed LEAN run emits exactly one bounded machine-readable message beginning
+with `TRADING_BOT_LAB_LEAN_PARITY_V1:`. LEAN may wrap that message across physical
+log lines; the extractor rejoins only the single size-bounded root JSON object after
+the exact prefix. The payload is compact canonical JSON for a v1
+`lean_engine_observation`; ordinary human-readable log lines are never parsed as
+parity evidence. The strict extractor rejects missing or duplicate
 prefixed records, duplicate JSON keys, non-finite or non-canonical numbers,
 wrong versions or hashes, extra fields, machine paths, URLs, account metadata,
 and credentials. Stable serialization uses a final newline and contains no
@@ -133,7 +135,7 @@ numeric LEAN version; visible bars; signals and next-open intents; fills, fees
 and slippage; cash, position, average cost, realized and unrealized PnL, equity,
 exposure and drawdown; risk events; and final pending-signal status.
 
-## Preparation and future manual execution
+## Preparation and pinned local execution
 
 Preparation is offline and copies the exact fixture bytes, after validation, to
 the ignored local default path:
@@ -148,30 +150,39 @@ the exact SHA-256, uses atomic replacement, and rejects unsafe paths and
 symlinks. It is idempotent and never invokes LEAN, Docker, QuantConnect, Object
 Store, a network, or a paid-data operation.
 
-During a later, separately authorized local engine session, run only the
-dedicated project with the default local transport and keep all output ignored:
+The Linux-only operator is the authoritative execution boundary. A bare command
+runs only read-only preflight; each mutating phase requires its exact public
+authorization phrase:
 
-```powershell
-$LeanExe = (Resolve-Path ".\.venv\Scripts\lean.exe").Path
-
-python scripts\export_local_parity.py `
-  --output reports\parity\local-v1.json
-
-New-Item -ItemType Directory -Force .\logs\parity | Out-Null
-Push-Location .\lean-workspace
-& $LeanExe backtest "Strategies/ParityFixtureV1" --no-update `
-  --output ".\Strategies\ParityFixtureV1\backtests\parity-v1" |
-  Tee-Object -FilePath "..\logs\parity\lean-v1.log"
-Pop-Location
-
-python scripts\extract_lean_parity.py `
-  --input logs\parity\lean-v1.log `
-  --output reports\parity\lean-v1.json
-
-python scripts\compare_lean_parity.py `
-  --local-trace reports\parity\local-v1.json `
-  --lean-trace reports\parity\lean-v1.json
+```bash
+python scripts/run_lean_parity_local.py
+python scripts/run_lean_parity_local.py pull \
+  --pull-authorization pull-pinned-lean-parity-image
+python scripts/run_lean_parity_local.py prepare \
+  --prepare-authorization prepare-exact-parity-fixture
+python scripts/run_lean_parity_local.py run \
+  --run-authorization execute-pinned-parity-v1
+python scripts/run_lean_parity_local.py compare \
+  --compare-authorization compare-exact-parity-v1
 ```
+
+The contract accepts one immutable OCI index and its one `linux/amd64`
+platform manifest, LEAN CLI `1.0.227`, and the explicit user-owned rootless
+Docker socket. The host CLI gets a private credential-free HOME and failing
+HTTP/HTTPS proxy while Docker SDK access to the Unix socket must still succeed.
+A mutable tag moving after an immutable digest has been reviewed is expected
+and does not invalidate that digest. Runtime execution validates and uses the
+immutable digest directly. Mutable discovery metadata cannot authorize a pull,
+an engine container, or a parity claim.
+
+The realized engine container is validated before start with no network,
+published ports, privilege, host namespaces, Docker socket, credentials, or
+mounts beyond the exact temporary project, data, output, and CLI paths.
+One ignored state file permits only the authorized pull and at most seven
+cumulative serialized executions. The first five remain permanent history; the
+open-phase-risk-correction-1 batch authorizes at most two additional runs and
+does not authorize another pull. Raw logs, runtime audits, normalized traces,
+comparison output, and engine results remain ignored.
 
 For a later, separately authorized cloud run, the operator must first place the
 same exact fixture bytes at the fixed Object Store key using an explicitly
@@ -179,10 +190,37 @@ reviewed manual process, then select both Object Store parameters. Repository
 scripts never upload it. Missing content or a wrong hash fails closed. Do not
 add `--download-data`, a historical provider, optimization, or remote URL.
 
-This sprint prepares and tests the workflow only. No local LEAN run, cloud run,
-Object Store operation, or `lean_engine_observation` has been produced. The
-comparator's labelled test candidate remains test data, not parity evidence;
-the successful SPY cloud runs do not change that boundary.
+## 2026-07-28 genuine local comparison
+
+The pinned `linux/amd64` runtime processed the exact local fixture and produced one
+validated `lean_engine_observation`. The tracked sanitized result is
+`contracts/lean-local-parity/v1/2026-07-28.json`; raw logs, traces, audits, and
+engine results remain ignored and are represented only by SHA-256 digests.
+
+Fifteen comparison dimensions passed, including fixture identity, signal/intent/fill
+timing, direction/count, position, fees, slippage, cash, PnL, equity, exposure,
+drawdown, and final-bar behavior. `rejection_and_halt_state` failed because the
+LEAN exit-decision snapshot valued the current row at its close while the local
+oracle used the eligible next-bar open. Both engines approved the risk-reducing
+exit, but `daily_loss_pct`, `drawdown_pct`, and `order_weight` exceeded the fixed
+ratio tolerance. Execution-timing parity is therefore `passed`; numerical
+accounting/risk parity and the overall genuine-local result are `failed`. No
+profitability or strategy-quality claim follows from this validation run.
+
+The LEAN adapter correction builds its pre-trade risk snapshot explicitly from
+pre-fill cash, quantity, and the timestamp-matched execution open. After the
+correction commit passed the full local gate and both CI platforms, authorization
+batch `open-phase-risk-correction-1` consumed one additional cached-image
+execution, bringing the permanent cumulative count to six. The genuine rerun
+matched all sixteen dimensions; the three exit ratios were within the unchanged
+`0.0000001` tolerance.
+
+The historical failed record remains byte-for-byte unchanged. The separate
+content-bound rerun record is
+`contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json`.
+Execution-timing and numerical accounting parity are therefore `passed` for
+this exact synthetic fixture. This does not establish strategy quality,
+profitability, or general cross-engine equivalence.
 
 ## Failure rule
 

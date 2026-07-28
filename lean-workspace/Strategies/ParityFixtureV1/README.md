@@ -39,6 +39,17 @@ not implemented. Both modes read and validate all bytes, the exact SHA-256,
 LF-only line endings, rows, dates, and OHLCV relationships before the data
 subscription or strategy is created.
 
+## Authorized local runtime
+
+Do not invoke the local engine manually. The Linux-only
+`scripts/run_lean_parity_local.py` operator pins LEAN CLI `1.0.227`, the exact
+immutable `linux/amd64` engine image, the explicit rootless Docker socket, and
+the fixture identities. Its default phase is read-only, while pull,
+preparation, execution, and comparison require distinct exact authorization
+phrases. It uses a temporary public project copy and credential-free HOME, so
+CLI-generated local linkage never changes this tracked config or the private
+cloud workspace linkage. Raw outputs remain ignored.
+
 ## Timing and accounting boundary
 
 A signal is calculated only after bar N's close. The pending target is examined

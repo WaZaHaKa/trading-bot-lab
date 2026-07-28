@@ -4,7 +4,7 @@ import csv
 import json
 import re
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation, ROUND_DOWN
+from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_HALF_EVEN
 from hashlib import sha256
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NamedTuple
@@ -67,6 +67,7 @@ MAX_DRAWDOWN = Decimal("0.05")
 MONEY_PRECISION = 8
 QUANTITY_PRECISION = 0
 STRATEGY_HISTORY_LIMIT = 100
+MONEY_QUANTUM = Decimal("0.00000001")
 LEAN_VERSION_PATTERN = re.compile(r"^[0-9]+(?:\.[0-9]+)+$")
 
 
@@ -94,6 +95,38 @@ class TransportSelection(NamedTuple):
 class PendingSignal(NamedTuple):
     timestamp: str
     target_weight: Decimal
+
+
+class ExecutionOpenMark(NamedTuple):
+    """One explicit, timestamp-bound execution-open reference mark."""
+
+    timestamp: str
+    price: Decimal
+
+
+class OpenPhaseRiskSnapshot(NamedTuple):
+    """Contract-owned portfolio valuation immediately before an open fill."""
+
+    execution_timestamp: str
+    reference_open: Decimal
+    current_cash: Decimal
+    current_quantity: Decimal
+    current_exposure: Decimal
+    current_equity: Decimal
+    start_of_day_equity: Decimal
+    peak_equity: Decimal
+    daily_loss_pct: Decimal
+    drawdown_pct: Decimal
+
+    def order_weight(self, execution_notional: Decimal) -> Decimal:
+        if not isinstance(execution_notional, Decimal):
+            raise ValueError("execution notional must be an explicit Decimal")
+        if not execution_notional.is_finite() or execution_notional <= 0:
+            raise ValueError("execution notional must be positive and finite")
+        weight = execution_notional / self.current_equity
+        if not weight.is_finite():
+            raise ValueError("open-phase order weight must be finite")
+        return weight
 
 
 def canonical_decimal(value: object) -> str:
@@ -309,6 +342,161 @@ class TrailingSignalState:
         return target
 
 
+def parity_money(value: Decimal) -> Decimal:
+    """Apply the local engine's fixed eight-place money precision."""
+
+    return value.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_EVEN)
+
+
+def value_open_phase_risk_snapshot(
+    *,
+    execution_timestamp: str,
+    open_mark: ExecutionOpenMark,
+    current_cash: Decimal,
+    current_quantity: Decimal,
+    previous_close_equity: Decimal,
+    previous_peak_equity: Decimal,
+) -> OpenPhaseRiskSnapshot:
+    """Value the pre-fill portfolio from explicit state and the eligible row open."""
+
+    if not isinstance(execution_timestamp, str) or not execution_timestamp:
+        raise ValueError("execution timestamp must be a non-empty string")
+    if not isinstance(open_mark, ExecutionOpenMark):
+        raise ValueError("risk valuation requires an explicit execution-open mark")
+    if open_mark.timestamp != execution_timestamp:
+        raise ValueError("execution-open mark must match the execution timestamp")
+
+    values = {
+        "reference open": open_mark.price,
+        "current cash": current_cash,
+        "current quantity": current_quantity,
+        "previous close equity": previous_close_equity,
+        "previous peak equity": previous_peak_equity,
+    }
+    for name, value in values.items():
+        if not isinstance(value, Decimal):
+            raise ValueError(f"{name} must be an explicit Decimal")
+        if not value.is_finite():
+            raise ValueError(f"{name} must be finite")
+    if open_mark.price <= 0:
+        raise ValueError("reference open must be positive")
+    if current_cash < 0:
+        raise ValueError("current cash must be non-negative")
+    if current_quantity < 0:
+        raise ValueError("current quantity must be non-negative")
+    if current_quantity != current_quantity.to_integral_value(rounding=ROUND_DOWN):
+        raise ValueError("current quantity must use the fixed whole-share precision")
+    if previous_close_equity <= 0:
+        raise ValueError("previous close equity must be positive")
+    if previous_peak_equity <= 0:
+        raise ValueError("previous peak equity must be positive")
+    if previous_peak_equity < previous_close_equity:
+        raise ValueError("previous peak equity cannot be below the previous close")
+
+    try:
+        current_exposure = parity_money(current_quantity * open_mark.price)
+        current_equity = parity_money(current_cash + current_exposure)
+    except (InvalidOperation, OverflowError) as exc:
+        raise ValueError("open-phase equity is outside the fixed money precision") from exc
+    if not current_exposure.is_finite():
+        raise ValueError("open-phase exposure must be finite")
+    if not current_equity.is_finite() or current_equity <= 0:
+        raise ValueError("open-phase current equity must be positive and finite")
+
+    peak_equity = max(previous_peak_equity, current_equity)
+    daily_loss_pct = max(Decimal("0"), previous_close_equity - current_equity)
+    daily_loss_pct = daily_loss_pct / previous_close_equity
+    drawdown_pct = max(Decimal("0"), peak_equity - current_equity) / peak_equity
+    if not daily_loss_pct.is_finite() or not drawdown_pct.is_finite():
+        raise ValueError("open-phase risk ratios must be finite")
+    return OpenPhaseRiskSnapshot(
+        execution_timestamp=execution_timestamp,
+        reference_open=open_mark.price,
+        current_cash=current_cash,
+        current_quantity=current_quantity,
+        current_exposure=current_exposure,
+        current_equity=current_equity,
+        start_of_day_equity=previous_close_equity,
+        peak_equity=peak_equity,
+        daily_loss_pct=daily_loss_pct,
+        drawdown_pct=drawdown_pct,
+    )
+
+
+def cost_aware_target_quantity(
+    *,
+    target_weight: Decimal,
+    reference_price: Decimal,
+    current_quantity: Decimal,
+    cash: Decimal,
+) -> Decimal:
+    """Mirror the local engine's integer target sizing without LEAN buffers."""
+
+    values = (target_weight, reference_price, current_quantity, cash)
+    if any(not value.is_finite() for value in values):
+        raise ValueError("parity sizing inputs must be finite")
+    if reference_price <= 0 or current_quantity < 0 or cash < 0:
+        raise ValueError("parity sizing inputs must be nonnegative with a positive price")
+    if target_weight < 0 or target_weight > MAX_POSITION_WEIGHT:
+        raise ValueError("parity target weight is outside the long-only contract")
+    current_units = current_quantity.to_integral_value(rounding=ROUND_DOWN)
+    if current_units != current_quantity:
+        raise ValueError("parity holdings must use whole shares")
+    if target_weight == 0:
+        return Decimal("0")
+
+    equity = parity_money(cash + current_quantity * reference_price)
+    if equity <= 0:
+        return Decimal("0")
+    raw_target_units = (target_weight * equity / reference_price).to_integral_value(
+        rounding=ROUND_DOWN
+    )
+    current_market_value = parity_money(current_quantity * reference_price)
+    current_weight = current_market_value / equity
+    if current_weight <= target_weight:
+        low = int(current_units)
+        high = max(low, int(raw_target_units))
+    else:
+        low = 0
+        high = int(current_units)
+
+    best_units: int | None = None
+    while low <= high:
+        candidate_units = (low + high) // 2
+        candidate_quantity = Decimal(candidate_units)
+        delta = abs(candidate_quantity - current_quantity)
+        candidate_market_value = parity_money(candidate_quantity * reference_price)
+        execution_notional = Decimal("0")
+        is_buy = candidate_quantity > current_quantity
+        if delta == 0:
+            projected_cash = cash
+        else:
+            direction = Decimal("1") if is_buy else Decimal("-1")
+            execution_price = reference_price * (
+                Decimal("1") + direction * SLIPPAGE_BPS / Decimal("10000")
+            )
+            execution_notional = delta * execution_price
+            cash_notional = parity_money(execution_notional)
+            fee = parity_money(execution_notional * FEE_BPS / Decimal("10000"))
+            projected_cash = parity_money(
+                cash - cash_notional - fee if is_buy else cash + cash_notional - fee
+            )
+        projected_equity = parity_money(projected_cash + candidate_market_value)
+        order_within_limit = not is_buy or execution_notional / equity <= MAX_ORDER_NOTIONAL_WEIGHT
+        candidate_is_safe = (
+            projected_equity > 0
+            and candidate_market_value / projected_equity <= target_weight
+            and order_within_limit
+            and (not is_buy or (candidate_market_value > 0 and execution_notional > 0))
+        )
+        if candidate_is_safe:
+            best_units = candidate_units
+            low = candidate_units + 1
+        else:
+            high = candidate_units - 1
+    return Decimal("0") if best_units is None else Decimal(best_units)
+
+
 class ParityFixtureData(PythonData):
     """One strict custom-data parser shared by local and Object Store sources."""
 
@@ -518,9 +706,22 @@ class ParityFixtureV1(QCAlgorithm):
 
         point.value = float(expected.open)
         self._security.set_market_price(point)
+        holdings = self.portfolio[self._symbol]
+        open_snapshot = value_open_phase_risk_snapshot(
+            execution_timestamp=expected.timestamp,
+            open_mark=ExecutionOpenMark(
+                timestamp=expected.timestamp,
+                price=expected.open,
+            ),
+            current_cash=Decimal(str(self.portfolio.cash)),
+            current_quantity=Decimal(str(holdings.quantity)),
+            previous_close_equity=self._last_close_equity,
+            previous_peak_equity=self._peak_equity,
+        )
+        self._peak_equity = open_snapshot.peak_equity
         pending = self._signal_state.begin_bar(expected.timestamp)
         if pending is not None and not self._halt_reasons:
-            self._execute_pending(pending, expected)
+            self._execute_pending(pending, expected, open_snapshot)
 
         point.value = float(expected.close)
         self._security.set_market_price(point)
@@ -528,19 +729,26 @@ class ParityFixtureV1(QCAlgorithm):
         self._record_close(expected, target)
         self._bar_index += 1
 
-    def _execute_pending(self, pending: PendingSignal, bar: FixtureBar) -> None:
+    def _execute_pending(
+        self,
+        pending: PendingSignal,
+        bar: FixtureBar,
+        open_snapshot: OpenPhaseRiskSnapshot,
+    ) -> None:
         if pending.timestamp >= bar.timestamp:
             raise RuntimeError("a parity signal cannot execute on its own bar")
-        raw_quantity = Decimal(
-            str(self.calculate_order_quantity(self._symbol, float(pending.target_weight)))
+        if open_snapshot.execution_timestamp != bar.timestamp:
+            raise RuntimeError("open-phase snapshot differs from the pending execution row")
+        current_quantity = open_snapshot.current_quantity
+        target_quantity = cost_aware_target_quantity(
+            target_weight=pending.target_weight,
+            reference_price=bar.open,
+            current_quantity=current_quantity,
+            cash=open_snapshot.current_cash,
         )
-        quantity = raw_quantity.to_integral_value(rounding=ROUND_DOWN)
-        if raw_quantity != quantity:
-            raise RuntimeError("LEAN produced a non-integer v1 parity order quantity")
+        quantity = target_quantity - current_quantity
         if quantity == 0:
             return
-        holdings = self.portfolio[self._symbol]
-        current_quantity = Decimal(str(holdings.quantity))
         projected_quantity = current_quantity + quantity
         if projected_quantity < 0:
             raise RuntimeError("parity order would create a short position")
@@ -571,6 +779,7 @@ class ParityFixtureV1(QCAlgorithm):
         risk, reasons = self._risk_decision(
             intent_index=intent_index,
             quantity=quantity,
+            open_snapshot=open_snapshot,
             reference_open=bar.open,
             estimated_price=estimated_price,
             estimated_fee=estimated_fee,
@@ -601,15 +810,18 @@ class ParityFixtureV1(QCAlgorithm):
         *,
         intent_index: int,
         quantity: Decimal,
+        open_snapshot: OpenPhaseRiskSnapshot,
         reference_open: Decimal,
         estimated_price: Decimal,
         estimated_fee: Decimal,
         target_weight: Decimal,
     ) -> tuple[dict[str, object], tuple[str, ...]]:
-        holdings = self.portfolio[self._symbol]
-        current_quantity = Decimal(str(holdings.quantity))
-        current_cash = Decimal(str(self.portfolio.cash))
-        current_equity = Decimal(str(self.portfolio.total_portfolio_value))
+        if open_snapshot.execution_timestamp != self._fixture_bars[self._bar_index].timestamp:
+            raise RuntimeError("risk snapshot differs from the active fixture row")
+        if open_snapshot.reference_open != reference_open:
+            raise RuntimeError("risk snapshot differs from the execution reference open")
+        current_quantity = open_snapshot.current_quantity
+        current_cash = open_snapshot.current_cash
         projected_quantity = current_quantity + quantity
         trade_value = abs(quantity) * estimated_price
         projected_cash = (
@@ -623,10 +835,9 @@ class ParityFixtureV1(QCAlgorithm):
             if projected_equity > 0
             else Decimal("Infinity")
         )
-        order_weight = trade_value / current_equity
-        daily_loss = max(Decimal("0"), self._last_close_equity - current_equity)
-        daily_loss = daily_loss / self._last_close_equity
-        drawdown = max(Decimal("0"), self._peak_equity - current_equity) / self._peak_equity
+        order_weight = open_snapshot.order_weight(trade_value)
+        daily_loss = open_snapshot.daily_loss_pct
+        drawdown = open_snapshot.drawdown_pct
         reduces_risk = abs(projected_quantity) < abs(current_quantity)
 
         reasons: list[str] = []
@@ -744,6 +955,9 @@ class ParityFixtureV1(QCAlgorithm):
             self._halt_reasons = tuple(reasons)
 
         position_value = Decimal(str(holdings.holdings_value))
+        unrealized_profit = parity_money(
+            Decimal(str(holdings.quantity)) * (bar.close - Decimal(str(holdings.average_price)))
+        )
         exposure = abs(position_value) / equity if equity > 0 else Decimal("0")
         self._bars.append(
             {
@@ -769,7 +983,7 @@ class ParityFixtureV1(QCAlgorithm):
                 "symbol": SYMBOL,
                 "target_weight_for_next_bar": canonical_decimal(target),
                 "timestamp": bar.timestamp,
-                "unrealized_pnl": canonical_decimal(holdings.unrealized_profit),
+                "unrealized_pnl": canonical_decimal(unrealized_profit),
                 "volume": canonical_decimal(bar.volume),
             }
         )

@@ -1,7 +1,8 @@
 # LEAN integration guide
 
 Status: **LEAN cloud engine validation completed for both SPY research projects;
-identical-data parity remains pending and live trading remains prohibited.**
+the corrected pinned local identical-data rerun passed all sixteen dimensions;
+live trading remains prohibited.**
 
 LEAN is the primary cross-asset research engine. The local Python CSV engine
 remains an independent deterministic oracle and must not be deleted or changed
@@ -31,6 +32,12 @@ lean-workspace/
 contracts/lean-cloud-validation/v1/
   record.schema.json                closed public record schema
   2026-07-28.json                   sanitized canonical observations
+
+contracts/lean-local-parity/v1/
+  record.schema.json                closed backward-compatible v1 schema
+  2026-07-28.json                   immutable historical failed record
+  2026-07-28-open-phase-rerun-1.json
+                                    sanitized successful rerun record
 
 lean/                               preserved pre-activation files
 ```
@@ -77,8 +84,9 @@ upload or download, network fallback, external market data, or optimization.
 
 All three projects raise immediately if LEAN reports live mode. None contains a
 secret, live configuration, model, data-download path, or broker/exchange
-integration. Only the two SPY projects have completed a LEAN run;
-`ParityFixtureV1` has not.
+integration. The two SPY projects completed cloud runs; `ParityFixtureV1` completed
+a network-isolated local run over the committed synthetic fixture and has not been
+pushed or executed in the cloud.
 
 ## Canonical cloud validation
 
@@ -179,7 +187,7 @@ Those commands are the already completed SPY cloud-validation workflow. They do
 not authorize a `ParityFixtureV1` push, cloud backtest, or Object Store action.
 Any such action requires a later explicit operator approval.
 
-## Identical-data preparation and future execution
+## Identical-data preparation and pinned local execution
 
 The offline preparer validates the committed fixture's LF bytes, schema version,
 rows, and exact hash, then atomically copies those same bytes to the ignored
@@ -195,34 +203,57 @@ Generated LEAN output stays under ignored `backtests/`; raw logs stay under
 `logs/`; normalized local and LEAN traces stay under `reports/` until explicitly
 sanitized and reviewed.
 
-During a separately authorized local session, the manual sequence is:
+The Linux-only operator is the authoritative local path. Its default invocation is
+a read-only preflight. Pull, preparation, execution, and comparison each require
+their exact public authorization phrase:
 
-```powershell
-$LeanExe = (Resolve-Path ".\.venv\Scripts\lean.exe").Path
+```bash
+python scripts/run_lean_parity_local.py
 
-python scripts\export_local_parity.py `
-  --output reports\parity\local-v1.json
+python scripts/run_lean_parity_local.py pull \
+  --pull-authorization pull-pinned-lean-parity-image
 
-New-Item -ItemType Directory -Force .\logs\parity | Out-Null
-Push-Location .\lean-workspace
-& $LeanExe backtest "Strategies/ParityFixtureV1" --no-update `
-  --output ".\Strategies\ParityFixtureV1\backtests\parity-v1" |
-  Tee-Object -FilePath "..\logs\parity\lean-v1.log"
-Pop-Location
+python scripts/run_lean_parity_local.py prepare \
+  --prepare-authorization prepare-exact-parity-fixture
 
-python scripts\extract_lean_parity.py `
-  --input logs\parity\lean-v1.log `
-  --output reports\parity\lean-v1.json
+python scripts/run_lean_parity_local.py run \
+  --run-authorization execute-pinned-parity-v1
 
-python scripts\compare_lean_parity.py `
-  --local-trace reports\parity\local-v1.json `
-  --lean-trace reports\parity\lean-v1.json
+python scripts/run_lean_parity_local.py compare \
+  --compare-authorization compare-exact-parity-v1
 ```
 
-LEAN must emit exactly one bounded line prefixed
-`TRADING_BOT_LAB_LEAN_PARITY_V1:`. The strict extractor accepts only its
-canonical JSON suffix, requires engine name `quantconnect_lean` and a dotted
-numeric runtime version, and rejects malformed or duplicate observations,
+The runtime accepts only LEAN CLI `1.0.227` and
+`quantconnect/lean@sha256:c03e9acab0ef6bd67cd44b968d10c40c13f4079164b8fe02148de45dbd0c0649`
+for `linux/amd64`, whose expected platform manifest is
+`sha256:6cdc4112fa14ed99eca5c313bc84c8008cc07d6143e25b3f6ddeb01df2501f0e`.
+A mutable tag moving after an immutable digest has been reviewed is expected
+and does not invalidate that digest. Runtime execution validates and uses the
+immutable digest directly. The optional `latest` observation is stored only as
+sanitized, explicitly non-authoritative discovery metadata.
+
+It validates the explicit rootless Unix socket and daemon identity, refuses
+system Docker, disables CLI database updates, and uses a private temporary HOME
+without credentials. Host HTTP and HTTPS are forced to a failing local proxy
+while the Docker SDK must still reach the rootless Unix socket.
+
+A process-local compatibility guard for the audited CLI strips its generated
+identity and broker defaults, runs from a temporary copy of the public project,
+prevents an implicit image pull or bridge network, and validates the realized
+container before starting it. The engine has `network_mode=none`, no published
+ports, no host namespace, no Docker socket or credential mount, all capabilities
+dropped, `no-new-privileges`, and bounded memory, CPU, and process count.
+Ignored state permits one pull and at most seven cumulative executions, rejects
+parallel runs, and cleanup requires a current-run sentinel. The first five are
+retained history; authorization batch open-phase-risk-correction-1 permits at
+most two additional runs and no image pull. Windows can validate the
+contract but intentionally refuses Linux Docker execution.
+
+LEAN must emit exactly one bounded message prefixed
+`TRADING_BOT_LAB_LEAN_PARITY_V1:`. The strict extractor rejoins only its single
+size-bounded root JSON object when LEAN wraps the message across physical log
+lines, requires engine name `quantconnect_lean` and a dotted numeric runtime
+version, and rejects malformed or duplicate observations,
 non-finite numbers, paths, URLs, account metadata, cloud IDs, and credentials.
 
 A future, separately approved cloud run requires the operator to place the
@@ -231,10 +262,22 @@ both transport parameters. Repository tooling performs no Object Store write.
 Never use `lean data download`, `--download-data`, a historical data provider,
 optimization, remote URL, or network fallback.
 
-No local or cloud LEAN execution or Object Store operation occurred in this
-implementation sprint. Execution-timing and numerical-accounting parity remain
-`pending_identical_data_execution` until an actual extracted
-`lean_engine_observation` passes every comparison dimension.
+The initial genuine local run used LEAN `2.5.0.0`, the pinned immutable image,
+the exact local fixture, and the rootless network-isolated runtime. Fifteen of
+sixteen dimensions passed; three exit-decision ratios exposed cached close-mark
+contamination. Its failed record remains unchanged at
+`contracts/lean-local-parity/v1/2026-07-28.json`.
+
+The adapter now values the pre-fill risk snapshot from timestamp-bound cash,
+quantity, and execution-open state. After the correction passed the full local
+gate and Ubuntu/Windows CI, authorization batch
+`open-phase-risk-correction-1` consumed one additional genuine execution. At a
+cumulative count of six, all sixteen dimensions matched with unchanged
+tolerances. The separate sanitized record is
+`contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json`. The second
+authorized execution was not used, and no image pull, Object Store operation, or
+cloud parity command occurred. This is exact-fixture engine-validation evidence,
+not a profitability, strategy-quality, or deployment claim.
 
 See `windows-lean-setup.md`, `qcc-guardrails.md`,
 `execution-timing-comparison.md`, `risk-policy-mapping.md`, and

@@ -2,14 +2,22 @@
 
 - Cloud authentication, organization membership, and project linkage remain
   external operator state; repository tests cannot prove them.
+- The local parity operator is intentionally limited to Linux, LEAN CLI
+  `1.0.227`, one immutable `linux/amd64` image, and the explicitly validated
+  user-owned rootless Docker daemon. Windows runs contract tests but refuses
+  local Docker execution.
+- Host-side HTTP/HTTPS isolation uses a process-local failing proxy because an
+  unprivileged network namespace is unavailable on the authorized host. It is
+  validated immediately before execution; the engine container independently
+  uses `network_mode=none`.
 - LEAN cloud data and engine versions can change independently of this source.
 - The completed cloud baseline covers one daily US equity using QuantConnect
   SPY data, not crypto or a multi-asset portfolio.
 - The successful cloud runs establish engine, synchronization, and public
   source/configuration validation only. They did not execute the committed
   synthetic parity fixture.
-- Execution-timing and numerical-accounting parity both remain
-  `pending_identical_data_execution`.
+- Genuine local execution-timing parity passed, but numerical accounting/risk
+  parity failed on three exit-decision risk ratios. Overall parity is failed.
 - Daily data cannot enforce or prove intraday daily-loss/stop behavior.
 - Cash-account settlement, exchange calendars, lot sizes, fills, and corporate
   actions differ from the local simulator.
@@ -19,22 +27,28 @@
 - Synthetic parity data checks semantics only and cannot validate market-data
   quality or a strategy edge.
 - A sanitized comparator fixture is not a LEAN engine observation.
-- The committed fixture can be validated and copied byte-for-byte to the
-  ignored LEAN custom-data path, and the dedicated project plus normalized v1
-  observation producer and extractor are implemented. They have not been
-  executed or verified by a LEAN engine.
-- Neither the default local-file transport nor the explicit Object Store
-  transport has processed the fixture in LEAN. No Object Store upload, download,
-  or read was attempted in this implementation sprint.
-- No real `TRADING_BOT_LAB_LEAN_PARITY_V1:` line or
-  `lean_engine_observation` exists. Parser and comparator fixtures prove only
-  deterministic validation behavior, not LEAN timing or accounting.
+- The default local-file transport processed the committed fixture in a genuine
+  network-isolated LEAN `2.5.0.0` run. The explicit Object Store transport remains
+  unexecuted; no Object Store upload, download, or read was attempted.
+- A real ignored `TRADING_BOT_LAB_LEAN_PARITY_V1:` message and validated
+  `lean_engine_observation` now exist. The tracked records contain only sanitized
+  classifications and non-reversible digests, not raw messages or traces.
+- The first genuine comparison passed 15 of 16 dimensions. LEAN valued the
+  exit-decision risk snapshot at the current row close rather than the next-bar
+  open used by the local oracle, so three risk ratios exceeded tolerance even
+  though both engines approved the risk-reducing exit. That failed record remains
+  immutable historical evidence.
+- The adapter now constructs the open-phase risk snapshot explicitly. One
+  separately authorized genuine rerun passed all 16 dimensions, including the
+  three corrected ratios within the unchanged tolerance. This validates only
+  the exact eight-row synthetic fixture; it does not establish parity for other
+  datasets, algorithms, asset types, or runtime versions.
 - Observation extraction validates canonical structure, content binding, and
   the claimed engine/provenance state; it is not cryptographic runtime
   attestation. The operator must preserve and review the actual ignored LEAN
   log and invocation context before treating an extracted trace as evidence.
-- The runtime LEAN version remains execution-time evidence and cannot be filled
-  from source inspection or the earlier SPY cloud record.
+- The local parity runtime version is observed as LEAN `2.5.0.0`; it is separate
+  from the earlier cloud-validation engine version.
 - The compiler warning category `discouraged_exception_handling` remains in
   both cloud projects. It was non-fatal for these runs but has not been removed.
 - Project IDs, backtest IDs, URLs, account metadata, and raw cloud output are
@@ -53,6 +67,8 @@
 Cloud and local backtests are hypothetical, place no real orders, are not
 financial advice, and do not predict future results.
 
-The next safe milestone is an actual normalized LEAN trace over the committed
-synthetic fixture followed by the existing content-bound comparison. Any
-walk-forward work remains subsequent and separately reviewed.
+The corrected rerun consumed one additional execution, leaving the permanent
+cumulative count at six; the authorized second execution was not used, and no
+image pull occurred. The next safe milestone is human review of the ready pull
+request. Object Store/cloud identical-data parity, other fixtures, walk-forward
+testing, and any deployment remain separate, explicitly reviewed work.

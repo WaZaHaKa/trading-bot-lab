@@ -1,7 +1,8 @@
 # LEAN cloud parity workspace
 
 This is the active, backtest-only LEAN workspace. It contains two deliberately
-small QuantConnect Cloud projects and is an additive migration target: the
+small QuantConnect Cloud projects and one synthetic local parity project. It is
+an additive migration target: the
 historical `../lean/` tree remains untouched until both projects compile,
 backtest, and pass a documented parity review.
 
@@ -33,6 +34,9 @@ Live trading remains prohibited.
   silently inherit LEAN's 100% starter allocation.
 - `Strategies/MovingAverageBaseline`: a long-only 20/50 moving-average smoke
   test with explicit fees, slippage, caps, and next-open execution.
+- `Strategies/ParityFixtureV1`: a synthetic, long-or-flat identical-data project
+  whose local-file run is permitted only through the pinned rootless runtime
+  operator in `scripts/run_lean_parity_local.py`.
 
 The moving-average project separates signal, portfolio target, risk, and
 execution responsibilities. A completed daily close may create a target, but
@@ -50,6 +54,13 @@ breaker. The local simulator latches and continues valuation without an
 automatic order. This cloud baseline cancels pending orders and, when invested,
 submits one conservative market-on-open liquidation for the next session. The
 difference must remain visible in parity reports.
+
+The local parity operator copies only the public parity project into an ignored
+temporary workspace. LEAN CLI may add a generated local ID to that copy, which
+is removed with the current-run sentinel; the tracked config and private cloud
+linkage remain untouched. The operator accepts only the pinned immutable engine
+image, uses the explicit rootless Docker socket, blocks host HTTP/HTTPS, and
+starts the engine only after validating a networkless unprivileged container.
 
 ## Private linkage preservation
 

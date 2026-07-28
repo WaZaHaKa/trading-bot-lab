@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import ast
+import copy
 import importlib.util
 import json
 import sys
+from datetime import datetime
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
+
+from trading_bot_lab.parity import (
+    ParityMismatchError,
+    build_local_parity_trace,
+    compare_parity_traces,
+)
+from trading_bot_lab.parity.compare import COMPARISON_DIMENSIONS
+from trading_bot_lab.parity.contract import load_contract_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT / "lean-workspace"
@@ -186,6 +197,39 @@ def _load_parity_with_algorithm_stubs(
     monkeypatch.setitem(sys.modules, module_name, module)
     spec.loader.exec_module(module)
     return module
+
+
+def _open_snapshot(
+    module: ModuleType,
+    *,
+    timestamp: str = "2024-01-09T00:00:00+00:00",
+    open_price: Decimal = Decimal("98"),
+    cash: Decimal = Decimal("90013.0048"),
+    quantity: Decimal = Decimal("96"),
+    previous_close_equity: Decimal = Decimal("99517.0048"),
+    previous_peak_equity: Decimal = Decimal("100000"),
+) -> object:
+    return module.value_open_phase_risk_snapshot(
+        execution_timestamp=timestamp,
+        open_mark=module.ExecutionOpenMark(timestamp=timestamp, price=open_price),
+        current_cash=cash,
+        current_quantity=quantity,
+        previous_close_equity=previous_close_equity,
+        previous_peak_equity=previous_peak_equity,
+    )
+
+
+def _risk_algorithm(
+    module: ModuleType,
+    *,
+    timestamp: str,
+    prior_decision_count: int = 0,
+) -> object:
+    algorithm = module.ParityFixtureV1()
+    algorithm._risk_decisions = [{} for _ in range(prior_decision_count)]
+    algorithm._fixture_bars = (SimpleNamespace(timestamp=timestamp),)
+    algorithm._bar_index = 0
+    return algorithm
 
 
 @pytest.mark.parametrize("project", PROJECTS)
@@ -567,6 +611,422 @@ def test_parity_signal_is_trailing_next_row_only_and_final_signal_expires(
     assert state.pending is not None
     assert state.pending.timestamp == "2024-01-11T00:00:00+00:00"
     assert module.canonical_decimal(state.pending.target_weight) == "0.1"
+
+
+def test_parity_cost_aware_sizing_matches_local_integer_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+
+    assert module.cost_aware_target_quantity(
+        target_weight=Decimal("0.1"),
+        reference_price=Decimal("104"),
+        current_quantity=Decimal("0"),
+        cash=Decimal("100000"),
+    ) == Decimal("96")
+    assert module.cost_aware_target_quantity(
+        target_weight=Decimal("0.1"),
+        reference_price=Decimal("103"),
+        current_quantity=Decimal("96"),
+        cash=Decimal("90013.0048"),
+    ) == Decimal("96")
+    assert module.cost_aware_target_quantity(
+        target_weight=Decimal("0"),
+        reference_price=Decimal("98"),
+        current_quantity=Decimal("96"),
+        cash=Decimal("90013.0048"),
+    ) == Decimal("0")
+    assert "calculate_order_quantity" not in _source(PARITY)
+
+
+def test_parity_open_phase_snapshot_uses_explicit_open_and_updates_peak(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+    snapshot = _open_snapshot(module)
+
+    assert snapshot.execution_timestamp == "2024-01-09T00:00:00+00:00"
+    assert snapshot.current_cash == Decimal("90013.0048")
+    assert snapshot.current_quantity == Decimal("96")
+    assert snapshot.current_exposure == Decimal("9408.00000000")
+    assert snapshot.current_equity == Decimal("99421.00480000")
+    assert snapshot.start_of_day_equity == Decimal("99517.0048")
+    assert snapshot.peak_equity == Decimal("100000")
+    assert (
+        snapshot.daily_loss_pct
+        == (snapshot.start_of_day_equity - snapshot.current_equity) / snapshot.start_of_day_equity
+    )
+    assert (
+        snapshot.drawdown_pct
+        == (snapshot.peak_equity - snapshot.current_equity) / snapshot.peak_equity
+    )
+    assert snapshot.order_weight(Decimal("9406.1184")) == (
+        Decimal("9406.1184") / snapshot.current_equity
+    )
+
+    changed_open = _open_snapshot(module, open_price=Decimal("97"))
+    assert changed_open.current_equity != snapshot.current_equity
+    assert changed_open.daily_loss_pct != snapshot.daily_loss_pct
+    assert changed_open.drawdown_pct != snapshot.drawdown_pct
+    assert changed_open.order_weight(Decimal("9406.1184")) != snapshot.order_weight(
+        Decimal("9406.1184")
+    )
+
+    new_peak = _open_snapshot(module, open_price=Decimal("1100"))
+    assert new_peak.peak_equity == new_peak.current_equity
+    assert new_peak.drawdown_pct == 0
+
+    half_even = _open_snapshot(
+        module,
+        open_price=Decimal("1.000000005"),
+        cash=Decimal("1"),
+        quantity=Decimal("1"),
+        previous_close_equity=Decimal("10"),
+        previous_peak_equity=Decimal("10"),
+    )
+    carry = _open_snapshot(
+        module,
+        open_price=Decimal("1.000000015"),
+        cash=Decimal("1"),
+        quantity=Decimal("1"),
+        previous_close_equity=Decimal("10"),
+        previous_peak_equity=Decimal("10"),
+    )
+    assert half_even.current_exposure == Decimal("1.00000000")
+    assert carry.current_exposure == Decimal("1.00000002")
+
+
+def test_parity_open_phase_snapshot_ignores_close_and_rejects_future_marks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+    fixture = ROOT / "tests" / "fixtures" / "parity" / "v1" / "synthetic_weekdays.csv"
+    bar = module.parse_fixture_bytes(fixture.read_bytes())[5]
+    changed_close = bar._replace(close=Decimal("1000000"))
+
+    original = _open_snapshot(module, timestamp=bar.timestamp, open_price=bar.open)
+    close_changed = _open_snapshot(
+        module,
+        timestamp=changed_close.timestamp,
+        open_price=changed_close.open,
+    )
+    assert original == close_changed
+
+    with pytest.raises(ValueError, match="execution timestamp"):
+        module.value_open_phase_risk_snapshot(
+            execution_timestamp=bar.timestamp,
+            open_mark=module.ExecutionOpenMark(
+                timestamp="2024-01-10T00:00:00+00:00",
+                price=bar.open,
+            ),
+            current_cash=Decimal("90013.0048"),
+            current_quantity=Decimal("96"),
+            previous_close_equity=Decimal("99517.0048"),
+            previous_peak_equity=Decimal("100000"),
+        )
+    with pytest.raises(ValueError, match="explicit execution-open mark"):
+        module.value_open_phase_risk_snapshot(
+            execution_timestamp=bar.timestamp,
+            open_mark=bar.open,
+            current_cash=Decimal("90013.0048"),
+            current_quantity=Decimal("96"),
+            previous_close_equity=Decimal("99517.0048"),
+            previous_peak_equity=Decimal("100000"),
+        )
+
+
+def test_parity_on_data_builds_open_snapshot_before_pending_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+    fixture = ROOT / "tests" / "fixtures" / "parity" / "v1" / "synthetic_weekdays.csv"
+    bar = module.parse_fixture_bytes(fixture.read_bytes())[5]
+    point = SimpleNamespace(session_timestamp=bar.timestamp, value=None)
+
+    class Data:
+        def contains_key(self, symbol: str) -> bool:
+            return symbol == "PARITY"
+
+        def __getitem__(self, symbol: str) -> object:
+            assert symbol == "PARITY"
+            return point
+
+    class Security:
+        def __init__(self) -> None:
+            self.marks: list[float] = []
+
+        def set_market_price(self, selected: object) -> None:
+            self.marks.append(selected.value)
+
+    class Portfolio:
+        cash = Decimal("90013.0048")
+
+        def __getitem__(self, symbol: str) -> object:
+            assert symbol == "PARITY"
+            return SimpleNamespace(quantity=Decimal("96"))
+
+    class SignalState:
+        def begin_bar(self, timestamp: str) -> object:
+            assert timestamp == bar.timestamp
+            return SimpleNamespace(
+                timestamp="2024-01-08T00:00:00+00:00",
+                target_weight=Decimal("0"),
+            )
+
+        def finish_bar(self, timestamp: str, close: Decimal) -> Decimal:
+            assert timestamp == bar.timestamp
+            assert close == bar.close
+            return Decimal("0")
+
+    security = Security()
+    algorithm = module.ParityFixtureV1()
+    algorithm._symbol = "PARITY"
+    algorithm._fixture_bars = (bar,)
+    algorithm._bar_index = 0
+    algorithm.time = datetime(2024, 1, 9)
+    algorithm._security = security
+    algorithm.portfolio = Portfolio()
+    algorithm._last_close_equity = Decimal("99517.0048")
+    algorithm._peak_equity = Decimal("100000")
+    algorithm._halt_reasons = ()
+    algorithm._signal_state = SignalState()
+    executions: list[tuple[object, object, object, Decimal]] = []
+    closes: list[tuple[object, Decimal]] = []
+    algorithm._execute_pending = lambda pending, selected, snapshot: executions.append(
+        (pending, selected, snapshot, algorithm._peak_equity)
+    )
+    algorithm._record_close = lambda selected, target: closes.append((selected, target))
+
+    algorithm.on_data(Data())
+
+    assert security.marks == [98.0, 97.0]
+    assert len(executions) == 1
+    _, selected_bar, snapshot, peak_at_pending = executions[0]
+    assert selected_bar is bar
+    assert snapshot.execution_timestamp == bar.timestamp
+    assert snapshot.reference_open == bar.open
+    assert snapshot.current_equity == Decimal("99421.00480000")
+    assert peak_at_pending == snapshot.peak_equity
+    assert closes == [(bar, Decimal("0"))]
+    assert algorithm._bar_index == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("cash", Decimal("-1")),
+        ("cash", Decimal("NaN")),
+        ("quantity", Decimal("-1")),
+        ("quantity", Decimal("0.5")),
+        ("quantity", Decimal("Infinity")),
+        ("open_price", Decimal("0")),
+        ("open_price", Decimal("NaN")),
+        ("previous_close_equity", Decimal("0")),
+        ("previous_close_equity", Decimal("Infinity")),
+        ("previous_peak_equity", Decimal("0")),
+        ("previous_peak_equity", Decimal("NaN")),
+    ],
+)
+def test_parity_open_phase_snapshot_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: Decimal,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+    inputs = {
+        "cash": Decimal("90013.0048"),
+        "quantity": Decimal("96"),
+        "open_price": Decimal("98"),
+        "previous_close_equity": Decimal("99517.0048"),
+        "previous_peak_equity": Decimal("100000"),
+    }
+    inputs[field] = value
+
+    with pytest.raises(ValueError):
+        _open_snapshot(module, **inputs)
+
+    with pytest.raises(ValueError, match="current equity"):
+        _open_snapshot(
+            module,
+            cash=Decimal("0"),
+            quantity=Decimal("0"),
+        )
+    snapshot = _open_snapshot(module)
+    for notional in (Decimal("0"), Decimal("-1"), Decimal("NaN"), Decimal("Infinity")):
+        with pytest.raises(ValueError, match="execution notional"):
+            snapshot.order_weight(notional)
+
+
+def test_parity_open_phase_regression_recreates_close_contamination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+    tolerance = Decimal(load_contract_bundle().contract["tolerances"]["ratio"])
+    notional = Decimal("9406.1184")
+    open_snapshot = _open_snapshot(module, open_price=Decimal("98"))
+    close_snapshot = _open_snapshot(module, open_price=Decimal("97"))
+
+    expected = {
+        "daily_loss_pct": Decimal("0.0009646592598476513"),
+        "drawdown_pct": Decimal("0.005789953996800032"),
+        "order_weight": Decimal("0.0946089655582672"),
+    }
+    observed = {
+        "daily_loss_pct": Decimal("0.001929318515824141845555223141"),
+        "drawdown_pct": Decimal("0.006749952"),
+        "order_weight": Decimal("0.09470040720300070904199946235"),
+    }
+    open_metrics = {
+        "daily_loss_pct": open_snapshot.daily_loss_pct,
+        "drawdown_pct": open_snapshot.drawdown_pct,
+        "order_weight": open_snapshot.order_weight(notional),
+    }
+    close_metrics = {
+        "daily_loss_pct": close_snapshot.daily_loss_pct,
+        "drawdown_pct": close_snapshot.drawdown_pct,
+        "order_weight": close_snapshot.order_weight(notional),
+    }
+
+    assert all(abs(open_metrics[field] - value) <= tolerance for field, value in expected.items())
+    assert close_metrics == observed
+    assert all(abs(close_metrics[field] - expected[field]) > tolerance for field in expected)
+
+
+def test_parity_risk_decision_keeps_buy_exit_and_projected_state_semantics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+    buy_timestamp = "2024-01-05T00:00:00+00:00"
+    buy_snapshot = _open_snapshot(
+        module,
+        timestamp=buy_timestamp,
+        open_price=Decimal("104"),
+        cash=Decimal("100000"),
+        quantity=Decimal("0"),
+        previous_close_equity=Decimal("100000"),
+        previous_peak_equity=Decimal("100000"),
+    )
+    buy_algorithm = _risk_algorithm(module, timestamp=buy_timestamp)
+    buy_risk, buy_reasons = buy_algorithm._risk_decision(
+        intent_index=0,
+        quantity=Decimal("96"),
+        reference_open=Decimal("104"),
+        estimated_price=Decimal("104.0208"),
+        estimated_fee=Decimal("0.99859968"),
+        target_weight=Decimal("0.1"),
+        open_snapshot=buy_snapshot,
+    )
+
+    assert buy_reasons == ()
+    assert buy_risk["status"] == "approved"
+    assert buy_risk["metrics"] == {
+        "asset_weight": "0.09984299069662382909994766358",
+        "daily_loss_pct": "0",
+        "drawdown_pct": "0",
+        "order_weight": "0.099859968",
+        "projected_cash": "90013.00460032",
+        "projected_equity": "99997.00460032",
+        "reduces_risk": "0",
+        "total_gross_weight": "0.09984299069662382909994766358",
+    }
+
+    exit_snapshot = _open_snapshot(module)
+    exit_algorithm = _risk_algorithm(
+        module,
+        timestamp="2024-01-09T00:00:00+00:00",
+        prior_decision_count=1,
+    )
+    exit_risk, exit_reasons = exit_algorithm._risk_decision(
+        intent_index=1,
+        quantity=Decimal("-96"),
+        reference_open=Decimal("98"),
+        estimated_price=Decimal("97.9804"),
+        estimated_fee=Decimal("0.94061184"),
+        target_weight=Decimal("0"),
+        open_snapshot=exit_snapshot,
+    )
+
+    assert exit_reasons == ()
+    assert exit_risk["status"] == "approved"
+    assert exit_risk["metrics"]["reduces_risk"] == "1"
+    assert exit_risk["metrics"]["projected_cash"] == "99418.18258816"
+    assert exit_risk["metrics"]["projected_equity"] == "99418.18258816"
+    assert _source(PARITY).count("self.portfolio.total_portfolio_value") == 1
+
+
+def test_corrected_open_snapshot_passes_real_comparator_without_tolerance_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+    local = build_local_parity_trace()
+    candidate = copy.deepcopy(local)
+    candidate["provenance"] = "contract_fixture_not_engine_observation"
+    candidate["engine"] = {
+        "name": "lean_contract_fixture",
+        "version": "not_observed_from_lean",
+    }
+
+    buy_timestamp = "2024-01-05T00:00:00+00:00"
+    buy_algorithm = _risk_algorithm(module, timestamp=buy_timestamp)
+    buy_risk, _ = buy_algorithm._risk_decision(
+        intent_index=0,
+        quantity=Decimal("96"),
+        reference_open=Decimal("104"),
+        estimated_price=Decimal("104.0208"),
+        estimated_fee=Decimal("0.99859968"),
+        target_weight=Decimal("0.1"),
+        open_snapshot=_open_snapshot(
+            module,
+            timestamp=buy_timestamp,
+            open_price=Decimal("104"),
+            cash=Decimal("100000"),
+            quantity=Decimal("0"),
+            previous_close_equity=Decimal("100000"),
+            previous_peak_equity=Decimal("100000"),
+        ),
+    )
+    exit_algorithm = _risk_algorithm(
+        module,
+        timestamp="2024-01-09T00:00:00+00:00",
+        prior_decision_count=1,
+    )
+    exit_risk, _ = exit_algorithm._risk_decision(
+        intent_index=1,
+        quantity=Decimal("-96"),
+        reference_open=Decimal("98"),
+        estimated_price=Decimal("97.9804"),
+        estimated_fee=Decimal("0.94061184"),
+        target_weight=Decimal("0"),
+        open_snapshot=_open_snapshot(module),
+    )
+    candidate["risk_decisions"] = [buy_risk, exit_risk]
+
+    comparison = compare_parity_traces(local, candidate)
+    assert comparison.matched
+    assert comparison.dimensions == {dimension: "matched" for dimension in COMPARISON_DIMENSIONS}
+    assert comparison.tolerances["ratio"] == "0.0000001"
+    assert comparison.tolerances["quantity"] == "0"
+
+    close_candidate = copy.deepcopy(candidate)
+    close_snapshot = _open_snapshot(module, open_price=Decimal("97"))
+    close_candidate["risk_decisions"][1]["metrics"].update(
+        daily_loss_pct=module.canonical_decimal(close_snapshot.daily_loss_pct),
+        drawdown_pct=module.canonical_decimal(close_snapshot.drawdown_pct),
+        order_weight=module.canonical_decimal(close_snapshot.order_weight(Decimal("9406.1184"))),
+    )
+    with pytest.raises(ParityMismatchError) as mismatch:
+        compare_parity_traces(local, close_candidate)
+    assert set(mismatch.value.differences_by_dimension) == {"rejection_and_halt_state"}
+    differences = mismatch.value.differences_by_dimension["rejection_and_halt_state"]
+    assert len(differences) == 3
+    assert all(
+        any(field in difference for difference in differences)
+        for field in ("daily_loss_pct", "drawdown_pct", "order_weight")
+    )
+
+    contract_tolerances = load_contract_bundle().contract["tolerances"]
+    assert contract_tolerances["ratio"] == "0.0000001"
+    assert contract_tolerances["quantity"] == "0"
 
 
 def test_parity_observation_serialization_is_stable_bounded_and_prefixed(

@@ -493,3 +493,197 @@ The next separately authorized step is one manual `ParityFixtureV1` LEAN run,
 strict extraction of its ignored prefixed observation, and comparison against a
 fresh local-oracle trace. Walk-forward validation, optimization, Object Store
 automation, broker paper trading, and live trading remain out of scope.
+
+## 2026-07-28 - Pinned rootless LEAN parity runtime
+
+### Hypothesis
+
+No profitability hypothesis is being tested. This checkpoint makes the first
+genuine local identical-data run reproducible and fail-closed before any image
+pull or engine execution occurs.
+
+### Runtime and safety
+
+The operator pins LEAN CLI `1.0.227`, one immutable OCI index, its
+`linux/amd64` platform manifest, the exact fixture and normalized-bar hashes,
+and the explicit rootless Docker endpoint. Its default phase is read-only.
+Pull, fixture/oracle preparation, LEAN execution, and comparison require
+separate exact authorization phrases.
+
+The CLI runs with a private credential-free HOME, database updates disabled,
+host HTTP/HTTPS forced to fail, and Docker SDK access revalidated in that exact
+environment. A process-local guard removes CLI-injected identity and broker
+defaults, uses a temporary public project copy, prevents implicit pulls and
+bridge networking, and inspects the realized container before start. The engine
+has no network, published port, privilege, host namespace, Docker socket,
+credential, or unrelated mount.
+
+### Validation status
+
+Focused deterministic tests cover immutable image and manifest identity,
+rootless-daemon rejection, authorizations, bounded and serialized execution,
+fixture bytes, generated configuration sanitization, mount and environment
+safety, realized-container auditing, ignored outputs, narrow cleanup, read-only
+default behavior, and Windows refusal before Docker access. Full repository
+validation is required before the runtime contract is committed.
+
+No image pull, genuine LEAN run, cloud command, Object Store operation, market
+data download, optimization, broker connection, or live deployment occurred in
+this implementation checkpoint. Identical-data parity remains pending.
+
+### Decision
+
+Research-only runtime contract prepared for validation. It is not parity
+evidence and is not a paper- or live-trading candidate.
+
+### Notes
+
+After a clean committed checkpoint, the separately authorized operator phases
+may perform the one pinned image pull and a bounded genuine execution. Raw logs,
+engine output, runtime audits, normalized traces, and comparisons remain ignored
+until a distinct sanitization and review step.
+
+## 2026-07-28 - Genuine local identical-data LEAN comparison
+
+### Hypothesis
+
+No profitability hypothesis was tested. This run evaluated whether the pinned
+local LEAN engine and independent Python oracle agree on the same synthetic
+fixture under the v1 timing, cost, accounting, and risk contract.
+
+### Asset universe and data
+
+One synthetic `PARITY` symbol over the exact eight-row LF fixture, SHA-256
+`a68bcf7fc30d2593b32e5a98852c4f8e0190ed99865640485b344515d9f1f78a`.
+No external market data, Object Store, cloud backtest, broker, or exchange was
+used.
+
+### Signal and execution
+
+Both observations contain one 96-share buy and one 96-share sell at the next
+row open, with the final signal left unfilled. Fixture visibility, signal,
+intent, fill, direction/count, and final-bar dimensions passed.
+
+### Risk and accounting
+
+Position, fee, slippage, cash, PnL, equity, exposure, and drawdown dimensions
+passed within the fixed v1 tolerances. `rejection_and_halt_state` failed: LEAN's
+exit-decision portfolio snapshot valued the current row close, while the local
+oracle used the eligible next-bar open. The resulting `daily_loss_pct`,
+`drawdown_pct`, and `order_weight` ratios exceeded tolerance. Both engines still
+approved the risk-reducing long exit; no risk limit was bypassed or weakened.
+
+### Validation
+
+The immutable `linux/amd64` image ran through the verified rootless daemon with
+host HTTP/HTTPS blocked and the container configured with no network, privilege,
+credentials, Docker socket, or unrelated mount. Five bounded execution attempts
+were consumed. The sanitized closed-schema record is
+`contracts/lean-local-parity/v1/2026-07-28.json`; raw logs and traces remain
+ignored.
+
+### Decision
+
+`genuine_local_lean_parity_failed`. Keep the pull request draft. Execution timing
+is validated for this fixture, but overall numerical/risk parity is not
+established. This is research infrastructure evidence, not a profitability,
+paper-trading, or live-trading approval.
+
+### Notes
+
+A future retry requires separate authorization and must first correct and test
+the LEAN exit-risk valuation snapshot without changing the v1 expected values or
+tolerances.
+
+## 2026-07-28 - Open-phase LEAN risk snapshot correction
+
+### Hypothesis
+
+The three failed exit-decision ratios came only from LEAN's cached aggregate
+portfolio value carrying the current row close into an execution-open decision.
+Explicit cash plus quantity times the validated row open should remove that
+contamination without changing intent, fill, position, fees, accounting, risk
+thresholds, or comparator tolerances.
+
+### Implementation
+
+The LEAN adapter now creates one typed timestamp-bound snapshot before pending
+execution. It money-rounds open exposure and equity with the existing
+eight-place half-even contract, retains the previous completed close as
+start-of-day equity, updates the peak at the open, and derives loss, drawdown,
+and order weight from that state. Close-phase aggregate accounting remains
+separate. The cumulative runtime ceiling is seven: five retained historical
+executions plus at most two in authorization batch
+`open-phase-risk-correction-1`; the one-pull ceiling is unchanged.
+
+### Validation
+
+Focused offline unit and real-comparator regressions pass. They reproduce the
+three historical close-mark values exactly, put the corrected open-mark values
+within the unchanged ratio tolerance, preserve buy and projected-state behavior,
+exercise actual `on_data` snapshot ordering, and keep the historical failed
+record byte-pinned. The full local gate and both Ubuntu and Windows CI remain
+mandatory before any genuine rerun.
+
+### Decision
+
+This is a tested implementation correction, not new LEAN evidence. Preserve
+`contracts/lean-local-parity/v1/2026-07-28.json` unchanged and keep overall
+genuine parity failed until a newly authorized run compares all sixteen
+dimensions.
+
+### Notes
+
+No LEAN execution, image pull, cloud command, Object Store operation, external
+market-data request, broker connection, optimization, or live deployment
+occurred while implementing this correction.
+
+## 2026-07-28 - Corrected genuine local LEAN parity rerun
+
+### Gate
+
+Correction commit `a675e559e4660809b3bec5f3415935504f8c01c1` passed
+the full local gate with 485 tests and passed Ubuntu and Windows CI run
+`30385637164`. The user-owned rootless daemon, cached immutable OCI index,
+`linux/amd64` platform manifest, exact LF fixture, deterministic local trace,
+and permanent five-execution/one-pull history were revalidated before execution.
+
+### Execution
+
+Authorization batch `open-phase-risk-correction-1` permitted at most two
+additional genuine executions and no pull. One execution was used, advancing
+the permanent cumulative count from five to six. The second execution was not
+used.
+
+### Result
+
+The genuine LEAN `2.5.0.0` observation matched the independent local oracle
+across all sixteen dimensions: fixture identity, bar visibility, signal timing,
+intent timing, fill timing, direction/count, position, fees, slippage, cash,
+realized/unrealized PnL, equity, exposure, drawdown, final-bar behavior, and
+rejection/halt state. The corrected `daily_loss_pct`, `drawdown_pct`, and
+`order_weight` differences were all below the unchanged `0.0000001` ratio
+tolerance.
+
+### Evidence
+
+The original failed record remains byte-for-byte unchanged with SHA-256
+`5832d6948bec3e4e672227200bf9e03484e5515afa2c3a14e07682e3200cf6f5`.
+The successful rerun is recorded separately at
+`contracts/lean-local-parity/v1/2026-07-28-open-phase-rerun-1.json`, including
+the predecessor digest, authorization counts, correction commit, immutable
+runtime identities, content hashes, unchanged tolerances, and every dimension.
+
+### Decision
+
+`genuine_local_lean_parity_passed` for the exact v1 synthetic fixture. The pull
+request may proceed to human review but must not be merged automatically. This
+result is research-infrastructure validation, not a profitability,
+strategy-quality, paper-trading, or live-trading approval.
+
+### Notes
+
+No image pull, cloud command, Object Store operation, external market-data
+request, broker/exchange connection, optimization, system-Docker access, or live
+deployment occurred. Raw logs, traces, runtime output, and machine metadata
+remain ignored and untracked.

@@ -1,0 +1,699 @@
+{
+  "$defs": {
+    "decimalString": {
+      "pattern": "^(?:0|[1-9][0-9]*|0\\.[0-9]*[1-9])$",
+      "type": "string"
+    },
+    "digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "dimensionStatus": {
+      "enum": [
+        "passed",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "gitCommit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:trading-bot-lab:lean-local-parity-validation:v1:record",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "not": {
+          "required": [
+            "rerun"
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "classifications": {
+            "properties": {
+              "numerical_accounting_parity": {
+                "const": "failed"
+              },
+              "overall_status": {
+                "const": "genuine_local_lean_parity_failed"
+              }
+            }
+          },
+          "comparison": {
+            "properties": {
+              "divergences": {
+                "minItems": 1
+              },
+              "matched": {
+                "const": false
+              }
+            }
+          },
+          "runtime": {
+            "properties": {
+              "execution_count": {
+                "maximum": 5
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "rerun"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "execution_count": {
+                "maximum": 7,
+                "minimum": 6
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "classifications": {
+            "properties": {
+              "numerical_accounting_parity": {
+                "const": "failed"
+              },
+              "overall_status": {
+                "const": "genuine_local_lean_parity_failed"
+              }
+            }
+          },
+          "comparison": {
+            "properties": {
+              "dimensions": {
+                "not": {
+                  "additionalProperties": {
+                    "const": "passed"
+                  }
+                }
+              },
+              "divergences": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "comparison": {
+            "properties": {
+              "matched": {
+                "const": true
+              }
+            },
+            "required": [
+              "matched"
+            ]
+          }
+        },
+        "required": [
+          "comparison"
+        ]
+      },
+      "then": {
+        "properties": {
+          "classifications": {
+            "properties": {
+              "execution_timing_parity": {
+                "const": "passed"
+              },
+              "numerical_accounting_parity": {
+                "const": "passed"
+              },
+              "overall_status": {
+                "const": "genuine_local_lean_parity_passed"
+              }
+            }
+          },
+          "comparison": {
+            "properties": {
+              "dimensions": {
+                "additionalProperties": {
+                  "const": "passed"
+                }
+              },
+              "divergences": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rerun": {
+            "properties": {
+              "batch_execution_count": {
+                "const": 1
+              }
+            },
+            "required": [
+              "batch_execution_count"
+            ]
+          }
+        },
+        "required": [
+          "rerun"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rerun": {
+            "properties": {
+              "cumulative_execution_count": {
+                "const": 6
+              }
+            }
+          },
+          "runtime": {
+            "properties": {
+              "execution_count": {
+                "const": 6
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rerun": {
+            "properties": {
+              "batch_execution_count": {
+                "const": 2
+              }
+            },
+            "required": [
+              "batch_execution_count"
+            ]
+          }
+        },
+        "required": [
+          "rerun"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rerun": {
+            "properties": {
+              "cumulative_execution_count": {
+                "const": 7
+              }
+            }
+          },
+          "runtime": {
+            "properties": {
+              "execution_count": {
+                "const": 7
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "classifications": {
+      "additionalProperties": false,
+      "properties": {
+        "execution_timing_parity": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "numerical_accounting_parity": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "overall_status": {
+          "enum": [
+            "genuine_local_lean_parity_passed",
+            "genuine_local_lean_parity_failed"
+          ]
+        }
+      },
+      "required": [
+        "execution_timing_parity",
+        "numerical_accounting_parity",
+        "overall_status"
+      ],
+      "type": "object"
+    },
+    "comparison": {
+      "additionalProperties": false,
+      "properties": {
+        "bars_compared": {
+          "const": 8
+        },
+        "dimensions": {
+          "additionalProperties": false,
+          "properties": {
+            "bar_visibility": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "cash": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "drawdown": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "equity": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "exposure": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "fees": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "fill_timing": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "final_bar_behavior": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "fixture_identity": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "intent_timing": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "position_state": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "realized_unrealized_pnl": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "rejection_and_halt_state": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "signal_timing": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "slippage": {
+              "$ref": "#/$defs/dimensionStatus"
+            },
+            "trade_direction_and_count": {
+              "$ref": "#/$defs/dimensionStatus"
+            }
+          },
+          "required": [
+            "fixture_identity",
+            "bar_visibility",
+            "signal_timing",
+            "intent_timing",
+            "fill_timing",
+            "trade_direction_and_count",
+            "position_state",
+            "fees",
+            "slippage",
+            "cash",
+            "realized_unrealized_pnl",
+            "equity",
+            "exposure",
+            "drawdown",
+            "final_bar_behavior",
+            "rejection_and_halt_state"
+          ],
+          "type": "object"
+        },
+        "divergences": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cause_category": {
+                "type": "string"
+              },
+              "dimension": {
+                "enum": [
+                  "fixture_identity",
+                  "bar_visibility",
+                  "signal_timing",
+                  "intent_timing",
+                  "fill_timing",
+                  "trade_direction_and_count",
+                  "position_state",
+                  "fees",
+                  "slippage",
+                  "cash",
+                  "realized_unrealized_pnl",
+                  "equity",
+                  "exposure",
+                  "drawdown",
+                  "final_bar_behavior",
+                  "rejection_and_halt_state"
+                ]
+              },
+              "explanation": {
+                "type": "string"
+              },
+              "observations": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "expected": {
+                      "$ref": "#/$defs/decimalString"
+                    },
+                    "field": {
+                      "type": "string"
+                    },
+                    "observed": {
+                      "$ref": "#/$defs/decimalString"
+                    },
+                    "tolerance": {
+                      "$ref": "#/$defs/decimalString"
+                    }
+                  },
+                  "required": [
+                    "expected",
+                    "field",
+                    "observed",
+                    "tolerance"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "risk_outcome": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "cause_category",
+              "dimension",
+              "explanation",
+              "observations",
+              "risk_outcome"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "fills_compared": {
+          "const": 2
+        },
+        "intents_compared": {
+          "const": 2
+        },
+        "matched": {
+          "type": "boolean"
+        },
+        "risk_decisions_compared": {
+          "const": 2
+        },
+        "tolerances": {
+          "additionalProperties": false,
+          "properties": {
+            "money": {
+              "$ref": "#/$defs/decimalString"
+            },
+            "price": {
+              "$ref": "#/$defs/decimalString"
+            },
+            "quantity": {
+              "$ref": "#/$defs/decimalString"
+            },
+            "ratio": {
+              "$ref": "#/$defs/decimalString"
+            }
+          },
+          "required": [
+            "money",
+            "price",
+            "quantity",
+            "ratio"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "bars_compared",
+        "dimensions",
+        "divergences",
+        "fills_compared",
+        "intents_compared",
+        "matched",
+        "risk_decisions_compared",
+        "tolerances"
+      ],
+      "type": "object"
+    },
+    "evidence_sha256": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm_source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "comparison_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contract_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixture_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "image_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "lean_trace_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "local_trace_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "normalized_bars_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "public_configuration_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "runtime_audit_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scenario_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "algorithm_source_sha256",
+        "comparison_sha256",
+        "contract_sha256",
+        "fixture_sha256",
+        "image_record_sha256",
+        "lean_trace_sha256",
+        "local_trace_sha256",
+        "normalized_bars_sha256",
+        "public_configuration_sha256",
+        "runtime_audit_sha256",
+        "scenario_manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "execution_date_utc": {
+      "const": "2026-07-28"
+    },
+    "record_type": {
+      "const": "lean_local_parity_validation"
+    },
+    "rerun": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_batch_id": {
+          "const": "open-phase-risk-correction-1"
+        },
+        "batch_execution_count": {
+          "maximum": 2,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "correction_category": {
+          "const": "execution_open_risk_snapshot_valuation"
+        },
+        "correction_commit_sha": {
+          "$ref": "#/$defs/gitCommit"
+        },
+        "correction_explanation": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "cumulative_execution_count": {
+          "maximum": 7,
+          "minimum": 6,
+          "type": "integer"
+        },
+        "maximum_additional_executions": {
+          "const": 2
+        },
+        "maximum_cumulative_executions": {
+          "const": 7
+        },
+        "predecessor_failed_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "authorization_batch_id",
+        "batch_execution_count",
+        "correction_category",
+        "correction_commit_sha",
+        "correction_explanation",
+        "cumulative_execution_count",
+        "maximum_additional_executions",
+        "maximum_cumulative_executions",
+        "predecessor_failed_record_sha256"
+      ],
+      "type": "object"
+    },
+    "runtime": {
+      "additionalProperties": false,
+      "properties": {
+        "container_isolation": {
+          "const": "passed"
+        },
+        "execution_count": {
+          "maximum": 7,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "host_http_https_isolation": {
+          "const": "passed"
+        },
+        "image_oci_index_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "lean_cli_version": {
+          "pattern": "^[0-9]+(?:\\.[0-9]+)+$",
+          "type": "string"
+        },
+        "lean_engine_version": {
+          "pattern": "^[0-9]+(?:\\.[0-9]+)+$",
+          "type": "string"
+        },
+        "platform": {
+          "const": "linux/amd64"
+        },
+        "platform_manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "pull_count": {
+          "const": 1
+        },
+        "rootless_docker_validation": {
+          "const": "passed"
+        }
+      },
+      "required": [
+        "container_isolation",
+        "execution_count",
+        "host_http_https_isolation",
+        "image_oci_index_digest",
+        "lean_cli_version",
+        "lean_engine_version",
+        "platform",
+        "platform_manifest_digest",
+        "pull_count",
+        "rootless_docker_validation"
+      ],
+      "type": "object"
+    },
+    "safety": {
+      "additionalProperties": false,
+      "properties": {
+        "broker_or_exchange_connectivity": {
+          "const": false
+        },
+        "external_market_data": {
+          "const": false
+        },
+        "live_deployment": {
+          "const": false
+        },
+        "optimization": {
+          "const": false
+        },
+        "system_docker_contacted": {
+          "const": false
+        }
+      },
+      "required": [
+        "broker_or_exchange_connectivity",
+        "external_market_data",
+        "live_deployment",
+        "optimization",
+        "system_docker_contacted"
+      ],
+      "type": "object"
+    },
+    "scenario": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": {
+          "const": "1.0.0"
+        },
+        "fixture": {
+          "const": "synthetic_weekdays.csv"
+        },
+        "scenario_id": {
+          "const": "weekday_ma_next_open_v1"
+        },
+        "schema_version": {
+          "const": "1.0.0"
+        }
+      },
+      "required": [
+        "contract_version",
+        "fixture",
+        "scenario_id",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    }
+  },
+  "required": [
+    "classifications",
+    "comparison",
+    "evidence_sha256",
+    "execution_date_utc",
+    "record_type",
+    "runtime",
+    "safety",
+    "scenario",
+    "schema_version"
+  ],
+  "type": "object"
+}

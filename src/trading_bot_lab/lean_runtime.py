@@ -608,6 +608,13 @@ def validate_lean_cli_network(name: object) -> None:
         raise LeanRuntimeError("LEAN attempted to select an unexpected Docker network")
 
 
+def validate_container_auto_remove(remove: object) -> None:
+    """Require CLI-managed cleanup instead of Docker daemon auto-removal."""
+
+    if remove is not False:
+        raise LeanRuntimeError("LEAN attempted to enable automatic container removal")
+
+
 def build_isolated_environment(
     base: Mapping[str, str],
     *,
@@ -1073,6 +1080,7 @@ def install_lean_cli_runtime_guards() -> None:
         **kwargs: Any,
     ) -> Any:
         del stdout, stderr
+        validate_container_auto_remove(remove)
         selected = str(image)
         validate_image_reference(selected)
         validate_lean_cli_network(kwargs.pop("network", None))
@@ -1085,7 +1093,6 @@ def install_lean_cli_runtime_guards() -> None:
             raise LeanRuntimeError("pinned image disappeared before container creation") from exc
         if kwargs.pop("detach", None) is not True:
             raise LeanRuntimeError("LEAN container must be created detached")
-        kwargs["remove"] = remove
         container = self.create(selected, command, **kwargs)
         try:
             container.reload()
@@ -1177,6 +1184,7 @@ __all__ = [
     "public_contract_summary",
     "require_authorization",
     "validate_actual_container",
+    "validate_container_auto_remove",
     "validate_container_run_kwargs",
     "validate_cli_version",
     "validate_docker_info",

@@ -45,6 +45,7 @@ from trading_bot_lab.lean_runtime import (
     sanitize_generated_lean_config,
     validate_actual_container,
     validate_cli_version,
+    validate_container_auto_remove,
     validate_container_run_kwargs,
     validate_docker_info,
     validate_generated_engine_config,
@@ -497,6 +498,13 @@ def test_cli_bridge_label_is_audited_but_never_used_as_container_network() -> No
             validate_lean_cli_network(unexpected)
 
     assert build_extra_docker_config()["network_mode"] == "none"
+
+
+def test_container_auto_remove_is_disabled_for_prestart_audit() -> None:
+    validate_container_auto_remove(False)
+    for unexpected in (None, True, 0, "false"):
+        with pytest.raises(LeanRuntimeError):
+            validate_container_auto_remove(unexpected)
 
 
 @pytest.mark.parametrize(

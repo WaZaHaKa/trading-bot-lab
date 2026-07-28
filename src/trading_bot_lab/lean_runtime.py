@@ -142,9 +142,9 @@ def map_machine_platform(machine: str) -> str:
     """Map one supported kernel architecture to the OCI platform contract."""
 
     normalized = machine.strip().casefold()
-    if normalized == "x86_64":
+    if normalized in {"amd64", "x86_64"}:
         return "linux/amd64"
-    if normalized == "aarch64":
+    if normalized in {"aarch64", "arm64"}:
         return "linux/arm64"
     raise LeanRuntimeError("unsupported machine architecture for LEAN parity")
 
@@ -198,12 +198,16 @@ def validate_docker_info(
         docker_root.resolve().relative_to(user_home.resolve())
     except ValueError as exc:
         raise LeanRuntimeError("DockerRootDir is outside the expected user home") from exc
-    if architecture != EXPECTED_ARCHITECTURE or operating_system != EXPECTED_OS:
+    if (
+        not isinstance(architecture, str)
+        or map_machine_platform(architecture) != EXPECTED_PLATFORM
+        or operating_system != EXPECTED_OS
+    ):
         raise LeanRuntimeError("rootless Docker platform differs from linux/amd64")
     return RootlessDockerIdentity(
         host=ROOTLESS_HOST,
         docker_root=docker_root,
-        architecture=str(architecture),
+        architecture=EXPECTED_ARCHITECTURE,
         operating_system=str(operating_system),
     )
 

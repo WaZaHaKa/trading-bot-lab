@@ -57,7 +57,7 @@ SOURCE_FIXTURE = ROOT / "tests" / "fixtures" / "parity" / "v1" / "synthetic_week
 
 def docker_info(home: Path) -> dict[str, object]:
     return {
-        "Architecture": "amd64",
+        "Architecture": "x86_64",
         "DockerRootDir": str(home / ".local" / "share" / "docker"),
         "OSType": "linux",
         "SecurityOptions": ["name=seccomp,profile=builtin", "name=rootless"],
@@ -148,6 +148,7 @@ def test_image_reference_rejects_tags_repositories_and_digests(reference: str) -
 
 def test_linux_platform_contract_rejects_other_hosts() -> None:
     validate_linux_host(system="Linux", machine="x86_64")
+    validate_linux_host(system="Linux", machine="amd64")
     with pytest.raises(LeanRuntimeError):
         validate_linux_host(system="Windows", machine="AMD64")
     with pytest.raises(LeanRuntimeError):

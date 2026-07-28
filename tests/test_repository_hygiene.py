@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from scripts.preflight_check import _walk_sensitive_json
+from scripts.preflight_check import (
+    _tracked_artifact_findings,
+    _tracked_lean_metadata_findings,
+    _walk_sensitive_json,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_PYTHON = tuple((ROOT / "src").rglob("*.py")) + tuple((ROOT / "scripts").glob("*.py"))
@@ -31,6 +35,15 @@ def git_source_files() -> tuple[str, ...]:
         text=True,
     )
     return tuple(path for path in result.stdout.split("\0") if path)
+
+
+def initialize_git_fixture(root: Path) -> None:
+    subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "config", "core.autocrlf", "false"],
+        cwd=root,
+        check=True,
+    )
 
 
 def test_active_mvp_has_no_network_or_live_adapter_imports() -> None:
@@ -177,12 +190,14 @@ def test_repository_current_state_is_public() -> None:
         "config.json",
         ".lean/credentials",
         "_lean_init_tmp/lean.json",
+        "lean-workspace/lean.json",
         "lean-workspace/data/market-hours/market-hours-database.json",
         "lean-workspace/storage/Object Store/state.json",
         "lean-workspace/Strategies/SkeletonBacktest/backtests/run/result.json",
         "lean-workspace/Strategies/MovingAverageBaseline/optimizations/run/result.json",
         "lean-workspace/live/session.json",
         "lean-workspace/logs/run.log",
+        "reports/lean-cloud/skeleton-validation.log",
         "lean-workspace/cache/state.json",
         "lean-workspace/results/result.json",
         "lean-workspace/api-token.txt",
@@ -203,7 +218,6 @@ def test_lean_workspace_generated_paths_are_ignored(relative: str) -> None:
     "relative",
     [
         "lean-workspace/README.md",
-        "lean-workspace/lean.json",
         "lean-workspace/Strategies/SkeletonBacktest/main.py",
         "lean-workspace/Strategies/SkeletonBacktest/config.json",
         "lean-workspace/Strategies/MovingAverageBaseline/main.py",
@@ -276,7 +290,126 @@ def test_lean_workspace_json_has_no_sensitive_values() -> None:
         }
         if generated_parts.intersection(part.lower() for part in path.parts):
             continue
+        if path == ROOT / "lean-workspace" / "lean.json":
+            continue
         visit(json.loads(path.read_text(encoding="utf-8")))
+
+
+@pytest.mark.parametrize("metadata_key", ["cloud-id", "organization-id", "local-id"])
+def test_preflight_rejects_linkage_metadata_in_tracked_project_configs(
+    tmp_path: Path,
+    metadata_key: str,
+) -> None:
+    initialize_git_fixture(tmp_path)
+    relative = "lean-workspace/Strategies/Example/config.json"
+    config = tmp_path / relative
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps(
+            {
+                "algorithm-language": "Python",
+                "description": "Public example.",
+                metadata_key: "private-local-linkage",
+                "parameters": {"symbol": "SPY"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "--", relative], cwd=tmp_path, check=True)
+    config.write_text(
+        json.dumps(
+            {
+                "algorithm-language": "Python",
+                "description": "Public example.",
+                "parameters": {"symbol": "SPY"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _tracked_lean_metadata_findings(tmp_path, [relative]) == [
+        f"{relative} contains private local cloud-linkage metadata: {metadata_key}"
+    ]
+
+
+def test_preflight_linkage_check_uses_staged_not_worktree_bytes(tmp_path: Path) -> None:
+    initialize_git_fixture(tmp_path)
+    relative = "lean-workspace/Strategies/Example/config.json"
+    config = tmp_path / relative
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"algorithm-language": "Python", "parameters": {"symbol": "SPY"}}),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "--", relative], cwd=tmp_path, check=True)
+    config.write_text(
+        json.dumps(
+            {
+                "algorithm-language": "Python",
+                "organization-id": "private-worktree-only-linkage",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _tracked_lean_metadata_findings(tmp_path, [relative]) == []
+
+
+def test_preflight_rejects_staged_sensitive_key_hidden_by_clean_worktree(tmp_path: Path) -> None:
+    initialize_git_fixture(tmp_path)
+    relative = "lean-workspace/Strategies/Example/config.json"
+    config = tmp_path / relative
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"algorithm-language": "Python", "api-token": "private-staged-value"}),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "--", relative], cwd=tmp_path, check=True)
+    config.write_text(
+        json.dumps({"algorithm-language": "Python", "parameters": {"symbol": "SPY"}}),
+        encoding="utf-8",
+    )
+
+    assert _tracked_lean_metadata_findings(tmp_path, [relative]) == [
+        f"{relative} staged content contains non-empty sensitive key: api-token"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("credential_value", "expected_description"),
+    [
+        ("-----BEGIN " + "PRIVATE KEY-----", "a private-key header"),
+        ("ghp_" + "A" * 20, "a likely credential signature"),
+    ],
+)
+def test_preflight_rejects_staged_credential_signature_hidden_by_clean_worktree(
+    tmp_path: Path,
+    credential_value: str,
+    expected_description: str,
+) -> None:
+    initialize_git_fixture(tmp_path)
+    relative = "lean-workspace/Strategies/Example/config.json"
+    config = tmp_path / relative
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"algorithm-language": "Python", "note": credential_value}),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "--", relative], cwd=tmp_path, check=True)
+    config.write_text(
+        json.dumps({"algorithm-language": "Python", "parameters": {"symbol": "SPY"}}),
+        encoding="utf-8",
+    )
+
+    assert _tracked_lean_metadata_findings(tmp_path, [relative]) == [
+        f"{relative} staged content contains {expected_description}"
+    ]
+
+
+def test_preflight_rejects_force_tracked_operator_linkage_file() -> None:
+    assert _tracked_artifact_findings(["lean-workspace/lean.json"]) == [
+        "tracked operator-local LEAN linkage is forbidden: lean-workspace/lean.json"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -285,9 +418,11 @@ def test_lean_workspace_json_has_no_sensitive_values() -> None:
         "tests/fixtures/parity/v1/synthetic_weekdays.csv",
         "tests/fixtures/parity/v1/scenario.json",
         "contracts/parity/v1/contract.json",
+        "contracts/lean-cloud-validation/v1/2026-07-28.json",
+        "contracts/lean-cloud-validation/v1/record.schema.json",
     ],
 )
-def test_parity_identity_files_have_lf_policy(relative: str) -> None:
+def test_versioned_contract_identity_files_have_lf_policy(relative: str) -> None:
     result = subprocess.run(
         ["git", "-C", str(ROOT), "check-attr", "eol", "--", relative],
         check=True,

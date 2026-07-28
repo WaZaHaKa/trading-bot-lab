@@ -350,9 +350,9 @@ live trading remain out of scope. LEAN remains preserved and paused.
 
 ### Hypothesis
 
-No profitability hypothesis is being tested. This sprint verifies LEAN cloud
-wiring, long-only risk controls, completed-bar/next-open timing, and an
-independent synthetic parity contract.
+No profitability hypothesis is being tested. This sprint validates LEAN cloud
+wiring and the public long-only project configuration while preserving a
+separate synthetic contract for future execution-timing and accounting parity.
 
 ### Asset universe and data
 
@@ -369,28 +369,46 @@ execution component. No final-bar fill is fabricated.
 
 ### Risk and costs
 
-Cash account, one-times leverage, 10% per-symbol and 30% total exposure caps,
-2% completed-daily loss and 5% peak-drawdown halts, explicit fee/slippage
-models, and an initialization-time live-mode rejection remain mandatory.
+Cash account, one-times leverage (no borrowing), 10% per-symbol and 30% total
+exposure caps, 2% completed-daily loss and 5% peak-drawdown halts, explicit
+fee/slippage models, and an initialization-time live-mode rejection remain mandatory.
 
 ### Validation status
 
 - Repository and migration audit completed.
 - LEAN CLI 1.0.227 located in the repository virtual environment.
 - `lean whoami` returned `You are not logged in`; no identity or token was printed.
-- Cloud project identifiers/results: pending interactive authentication and
-  successful scoped cloud runs. Do not interpret this entry as a completed
-  LEAN backtest.
-- Native verification after the final review: 246 pytest tests passed; Ruff
-  lint and format checks passed; repository preflight passed; `git diff
-  --check` returned success with Windows line-ending conversion warnings.
+- Explicit non-verbose pushes succeeded for both cloud projects. Both projects
+  compiled, initialized, and completed backtests under LEAN `2.5.0.0.17942`;
+  neither used a live deployment.
+- `SkeletonBacktest` observed zero orders, zero holdings, zero fees, and
+  unchanged $100,000 starting/ending equity.
+- `MovingAverageBaseline` observed 40 orders, $40 simulated fees, 1.3% reported
+  maximum drawdown, and $102,118.20 ending equity from $100,000 starting equity.
+  These are validation observations, not a profitability or strategy-quality claim.
+- Both compiles emitted only the non-fatal stable warning category
+  `discouraged_exception_handling`.
+- The schema-versioned sanitized record binds source, public configuration,
+  and ignored local push/validation logs by SHA-256. It contains no account
+  metadata, cloud/backtest IDs, URLs, absolute paths, warning text, or raw logs.
+- The hardened schema binds each canonical project to its public parameters,
+  finite metric ranges, coherent lifecycle, and derived validation status. The
+  typed normalizer additionally enforces same-date UTC timestamps.
+- Existing output symlinks are rejected before atomic record writes. The local
+  workspace linkage file is ignored but preserved in place, and preflight reads
+  staged project configs so index/worktree divergence cannot conceal linkage
+  metadata.
+- Cloud engine, project synchronization, and source/configuration validation
+  are `passed`. Execution-timing and numerical-accounting parity remain
+  `pending_identical_data_execution` because the cloud runs used QuantConnect
+  SPY data rather than the committed synthetic fixture.
 - The local v1 oracle trace processed 8 synthetic weekday bars and recorded one
   buy plus one sell, positive explicit fees/slippage, no risk rejection, and no
   final-bar intent/fill. Its comparator fixture is explicitly not a LEAN
   observation, so cross-engine parity remains unproven.
-- Docker Desktop's Linux engine was not available. The offline converter for
-  ignored LEAN-format synthetic data is unit-tested, but no local LEAN fixture
-  run or normalized LEAN trace was produced.
+- The implementation host's Docker Linux engine was not available. The offline
+  converter for ignored LEAN-format synthetic data is unit-tested, but no local
+  LEAN fixture run or normalized LEAN trace was produced.
 
 ### Decision
 
@@ -400,5 +418,6 @@ yet marked superseded.
 
 ### Notes
 
-The next safe milestone is walk-forward validation using LEAN cloud backtests
-and local parity checks. No optimization or live-trading milestone is approved.
+The next safe milestone is an actual normalized LEAN trace over the committed
+synthetic fixture and a content-bound comparison. Walk-forward, optimization,
+and live-trading milestones are not approved by this result.

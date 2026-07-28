@@ -1,0 +1,509 @@
+{
+  "$id": "urn:trading-bot-lab:lean-cloud-validation:v1:record",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "cloudFailedProject": {
+      "properties": {
+        "lifecycle": {
+          "anyOf": [
+            {
+              "properties": {"compilation": {"const": "failed"}},
+              "required": ["compilation"]
+            },
+            {
+              "properties": {"initialization": {"const": "failed"}},
+              "required": ["initialization"]
+            },
+            {
+              "properties": {"backtest_completion": {"const": "failed"}},
+              "required": ["backtest_completion"]
+            }
+          ],
+          "type": "object"
+        }
+      },
+      "required": ["lifecycle"],
+      "type": "object"
+    },
+    "cloudPassedProject": {
+      "properties": {
+        "lifecycle": {
+          "properties": {
+            "backtest_completion": {"const": "passed"},
+            "compilation": {"const": "passed"},
+            "initialization": {"const": "passed"}
+          },
+          "required": ["backtest_completion", "compilation", "initialization"],
+          "type": "object"
+        }
+      },
+      "required": ["lifecycle"],
+      "type": "object"
+    },
+    "evidenceDigests": {
+      "additionalProperties": false,
+      "properties": {
+        "public_configuration_sha256": {"$ref": "#/$defs/sha256"},
+        "push_log_sha256": {"$ref": "#/$defs/sha256"},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "validation_log_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "required": [
+        "public_configuration_sha256",
+        "push_log_sha256",
+        "source_sha256",
+        "validation_log_sha256"
+      ],
+      "type": "object"
+    },
+    "evidenceStatus": {
+      "enum": ["passed", "failed", "not_observed"]
+    },
+    "lifecycle": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {"backtest_completion": {"const": "passed"}},
+            "required": ["backtest_completion"]
+          },
+          "then": {
+            "properties": {"initialization": {"const": "passed"}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"initialization": {"const": "passed"}},
+            "required": ["initialization"]
+          },
+          "then": {
+            "properties": {"compilation": {"const": "passed"}}
+          }
+        }
+      ],
+      "properties": {
+        "backtest_completion": {"$ref": "#/$defs/evidenceStatus"},
+        "compilation": {"$ref": "#/$defs/evidenceStatus"},
+        "initialization": {"$ref": "#/$defs/evidenceStatus"},
+        "live_deployment": {"enum": ["absent", "not_observed"]},
+        "project_synchronization": {"$ref": "#/$defs/evidenceStatus"},
+        "source_configuration": {"$ref": "#/$defs/evidenceStatus"}
+      },
+      "required": [
+        "backtest_completion",
+        "compilation",
+        "initialization",
+        "live_deployment",
+        "project_synchronization",
+        "source_configuration"
+      ],
+      "type": "object"
+    },
+    "metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "ending_equity_usd": {"$ref": "#/$defs/positiveDecimalString"},
+        "ending_holdings_value_usd": {"$ref": "#/$defs/nonNegativeDecimalString"},
+        "maximum_drawdown_ratio": {"$ref": "#/$defs/unitIntervalDecimalString"},
+        "order_count": {"minimum": 0, "type": "integer"},
+        "simulated_fees_usd": {"$ref": "#/$defs/nonNegativeDecimalString"},
+        "starting_equity_usd": {"$ref": "#/$defs/positiveDecimalString"}
+      },
+      "required": [
+        "ending_equity_usd",
+        "ending_holdings_value_usd",
+        "maximum_drawdown_ratio",
+        "order_count",
+        "simulated_fees_usd",
+        "starting_equity_usd"
+      ],
+      "type": "object"
+    },
+    "movingAverageParameters": {
+      "const": {
+        "end-date": "2021-01-01",
+        "fast-period": "20",
+        "fee-bps": "1.0",
+        "initial-cash": "100000",
+        "max-daily-loss": "0.02",
+        "max-drawdown": "0.05",
+        "max-position-weight": "0.10",
+        "max-total-exposure": "0.30",
+        "minimum-fee": "1.0",
+        "slippage-bps": "2.0",
+        "slow-period": "50",
+        "start-date": "2020-01-01",
+        "symbol": "SPY",
+        "target-weight": "0.10",
+        "warmup-bars": "50"
+      },
+      "type": "object"
+    },
+    "nonNegativeDecimalString": {
+      "pattern": "^(?:0|[1-9][0-9]*|(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+      "type": "string"
+    },
+    "positiveDecimalString": {
+      "pattern": "^(?:[1-9][0-9]*|(?:0|[1-9][0-9]*)\\.[0-9]*[1-9])$",
+      "type": "string"
+    },
+    "projectSyncFailed": {
+      "properties": {
+        "lifecycle": {
+          "properties": {"project_synchronization": {"const": "failed"}},
+          "required": ["project_synchronization"],
+          "type": "object"
+        }
+      },
+      "required": ["lifecycle"],
+      "type": "object"
+    },
+    "projectSyncPassed": {
+      "properties": {
+        "lifecycle": {
+          "properties": {"project_synchronization": {"const": "passed"}},
+          "required": ["project_synchronization"],
+          "type": "object"
+        }
+      },
+      "required": ["lifecycle"],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "skeletonParameters": {
+      "const": {
+        "end-date": "2023-03-31",
+        "initial-cash": "100000",
+        "maximum-allocation": "0.05",
+        "start-date": "2023-01-01"
+      },
+      "type": "object"
+    },
+    "sourceConfigFailed": {
+      "properties": {
+        "lifecycle": {
+          "properties": {"source_configuration": {"const": "failed"}},
+          "required": ["source_configuration"],
+          "type": "object"
+        }
+      },
+      "required": ["lifecycle"],
+      "type": "object"
+    },
+    "sourceConfigPassed": {
+      "properties": {
+        "lifecycle": {
+          "properties": {"source_configuration": {"const": "passed"}},
+          "required": ["source_configuration"],
+          "type": "object"
+        }
+      },
+      "required": ["lifecycle"],
+      "type": "object"
+    },
+    "unitIntervalDecimalString": {
+      "pattern": "^(?:0|1|0\\.[0-9]*[1-9])$",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "projects": {"contains": {"$ref": "#/$defs/cloudFailedProject"}}
+        },
+        "required": ["projects"]
+      },
+      "then": {
+        "properties": {
+          "validation": {
+            "properties": {"cloud_engine_validation": {"const": "failed"}},
+            "required": ["cloud_engine_validation"]
+          }
+        }
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "projects": {"items": {"$ref": "#/$defs/cloudPassedProject"}}
+          },
+          "required": ["projects"]
+        },
+        "then": {
+          "properties": {
+            "validation": {
+              "properties": {"cloud_engine_validation": {"const": "passed"}},
+              "required": ["cloud_engine_validation"]
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "validation": {
+              "properties": {"cloud_engine_validation": {"const": "not_observed"}},
+              "required": ["cloud_engine_validation"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "projects": {"contains": {"$ref": "#/$defs/projectSyncFailed"}}
+        },
+        "required": ["projects"]
+      },
+      "then": {
+        "properties": {
+          "validation": {
+            "properties": {"project_synchronization_validation": {"const": "failed"}},
+            "required": ["project_synchronization_validation"]
+          }
+        }
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "projects": {"items": {"$ref": "#/$defs/projectSyncPassed"}}
+          },
+          "required": ["projects"]
+        },
+        "then": {
+          "properties": {
+            "validation": {
+              "properties": {"project_synchronization_validation": {"const": "passed"}},
+              "required": ["project_synchronization_validation"]
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "validation": {
+              "properties": {
+                "project_synchronization_validation": {"const": "not_observed"}
+              },
+              "required": ["project_synchronization_validation"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "projects": {"contains": {"$ref": "#/$defs/sourceConfigFailed"}}
+        },
+        "required": ["projects"]
+      },
+      "then": {
+        "properties": {
+          "validation": {
+            "properties": {"source_configuration_validation": {"const": "failed"}},
+            "required": ["source_configuration_validation"]
+          }
+        }
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "projects": {"items": {"$ref": "#/$defs/sourceConfigPassed"}}
+          },
+          "required": ["projects"]
+        },
+        "then": {
+          "properties": {
+            "validation": {
+              "properties": {"source_configuration_validation": {"const": "passed"}},
+              "required": ["source_configuration_validation"]
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "validation": {
+              "properties": {"source_configuration_validation": {"const": "not_observed"}},
+              "required": ["source_configuration_validation"]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "engine": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {"const": "QuantConnect LEAN"},
+        "version": {"pattern": "^[0-9]+(?:\\.[0-9]+){3,}$", "type": "string"}
+      },
+      "required": ["name", "version"],
+      "type": "object"
+    },
+    "execution_date_utc": {
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "type": "string"
+    },
+    "interpretation": {
+      "const": "validation_observations_only_not_strategy_quality"
+    },
+    "parity_evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "comparison_matched": {"const": null},
+        "contract_name": {"const": "trading_bot_lab_cross_engine_parity"},
+        "contract_version": {"const": "1.0.0"},
+        "data_scope": {"const": "quantconnect_spy_cloud_data"},
+        "identical_fixture_executed": {"const": false},
+        "normalized_trace_provenance": {"const": null},
+        "trace_schema_version": {"const": "1.0.0"}
+      },
+      "required": [
+        "comparison_matched",
+        "contract_name",
+        "contract_version",
+        "data_scope",
+        "identical_fixture_executed",
+        "normalized_trace_provenance",
+        "trace_schema_version"
+      ],
+      "type": "object"
+    },
+    "projects": {
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "project_name": {"const": "Strategies/MovingAverageBaseline"}
+            },
+            "required": ["project_name"],
+            "type": "object"
+          },
+          "maxContains": 1,
+          "minContains": 1
+        },
+        {
+          "contains": {
+            "properties": {"project_name": {"const": "Strategies/SkeletonBacktest"}},
+            "required": ["project_name"],
+            "type": "object"
+          },
+          "maxContains": 1,
+          "minContains": 1
+        }
+      ],
+      "items": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "project_name": {"const": "Strategies/MovingAverageBaseline"}
+              },
+              "required": ["project_name"]
+            },
+            "then": {
+              "properties": {
+                "algorithm_name": {"const": "MovingAverageBaseline"},
+                "parameters": {"$ref": "#/$defs/movingAverageParameters"}
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {"project_name": {"const": "Strategies/SkeletonBacktest"}},
+              "required": ["project_name"]
+            },
+            "then": {
+              "properties": {
+                "algorithm_name": {"const": "SkeletonBacktest"},
+                "parameters": {"$ref": "#/$defs/skeletonParameters"}
+              }
+            }
+          }
+        ],
+        "properties": {
+          "algorithm_name": {
+            "enum": ["MovingAverageBaseline", "SkeletonBacktest"]
+          },
+          "evidence_sha256": {"$ref": "#/$defs/evidenceDigests"},
+          "execution_timestamp_utc": {
+            "$comment": "The canonical Python normalizer additionally requires this date to equal execution_date_utc; portable Draft 2020-12 cannot compare sibling string values.",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": "string"
+          },
+          "lifecycle": {"$ref": "#/$defs/lifecycle"},
+          "metrics": {"$ref": "#/$defs/metrics"},
+          "parameters": {"type": "object"},
+          "project_name": {
+            "enum": [
+              "Strategies/MovingAverageBaseline",
+              "Strategies/SkeletonBacktest"
+            ]
+          },
+          "warning_categories": {
+            "items": {"const": "discouraged_exception_handling"},
+            "maxItems": 1,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "algorithm_name",
+          "evidence_sha256",
+          "execution_timestamp_utc",
+          "lifecycle",
+          "metrics",
+          "parameters",
+          "project_name",
+          "warning_categories"
+        ],
+        "type": "object"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "record_type": {"const": "lean_cloud_validation"},
+    "schema_version": {"const": "1.0.0"},
+    "validation": {
+      "additionalProperties": false,
+      "properties": {
+        "cloud_engine_validation": {"$ref": "#/$defs/evidenceStatus"},
+        "execution_timing_parity": {"const": "pending_identical_data_execution"},
+        "numerical_accounting_parity": {
+          "const": "pending_identical_data_execution"
+        },
+        "project_synchronization_validation": {"$ref": "#/$defs/evidenceStatus"},
+        "source_configuration_validation": {"$ref": "#/$defs/evidenceStatus"}
+      },
+      "required": [
+        "cloud_engine_validation",
+        "execution_timing_parity",
+        "numerical_accounting_parity",
+        "project_synchronization_validation",
+        "source_configuration_validation"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "engine",
+    "execution_date_utc",
+    "interpretation",
+    "parity_evidence",
+    "projects",
+    "record_type",
+    "schema_version",
+    "validation"
+  ],
+  "title": "Trading Bot Lab sanitized LEAN cloud-validation record v1",
+  "type": "object"
+}

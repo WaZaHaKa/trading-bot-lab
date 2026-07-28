@@ -104,8 +104,9 @@ lean/**/*.zip
 /_lean_init_tmp/
 
 # Active LEAN organization workspace generated/local state. Project source,
-# project config, READMEs, and credential-free lean-workspace/lean.json remain trackable.
+# project config and READMEs remain trackable; workspace linkage stays operator-local.
 /lean-workspace/.lean/
+/lean-workspace/lean.json
 /lean-workspace/data/**
 /lean-workspace/storage/**
 /lean-workspace/**/Object Store/**

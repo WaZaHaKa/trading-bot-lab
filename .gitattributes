@@ -2,3 +2,4 @@
 tests/fixtures/parity/v1/*.csv text eol=lf
 tests/fixtures/parity/v1/*.json text eol=lf
 contracts/parity/v1/*.json text eol=lf
+contracts/lean-cloud-validation/v1/*.json text eol=lf

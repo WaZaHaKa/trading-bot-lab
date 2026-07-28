@@ -43,13 +43,40 @@ direction, count, risk-reason, and final-bar fields remain strict.
 ## Provenance states
 
 - `local_python_oracle_observation`: produced by the repository's local engine.
-- `lean_engine_observation`: produced by an actual LEAN run and accompanied by
-  the LEAN version/backtest identifier.
+- `lean_engine_observation`: produced by an actual LEAN run as a versioned,
+  content-bound normalized trace.
 - `contract_fixture_not_engine_observation`: sanitized unit-test data used only
   to test the comparator. It must never be reported as a LEAN result.
 
-Only two engine-observation traces can establish cross-engine parity. Unit
-tests over a contract fixture prove comparator behavior, not LEAN execution.
+Only two engine-observation traces over the identical fixture can establish
+cross-engine parity. Unit tests over a contract fixture prove comparator
+behavior, not LEAN execution. Project IDs, backtest IDs, links, and account
+metadata are outside the parity schema and are not needed to establish trace
+provenance.
+
+## 2026-07-28 cloud-validation classification
+
+The successful non-verbose cloud runs used QuantConnect's SPY data, not the
+committed synthetic fixture. Their versioned sanitized observations live under
+`contracts/lean-cloud-validation/v1/`; the separate schema prevents a cloud
+smoke test from being represented as a parity result.
+
+Cloud-record normalization derives lifecycle classifications and fixes both
+parity fields at `pending_identical_data_execution`; neither a schema-valid
+record nor a cloud headline metric can substitute for two comparator traces.
+
+| Validation dimension | Status | Evidence boundary |
+|---|---|---|
+| Cloud engine | `passed` | Both projects compiled, initialized, and completed |
+| Project synchronization | `passed` | Both explicit non-verbose pushes succeeded |
+| Source/configuration | `passed` | Public source/config digests bind the pushed inputs |
+| Execution timing parity | `pending_identical_data_execution` | No LEAN trace over the synthetic fixture |
+| Numerical accounting parity | `pending_identical_data_execution` | No identical-data normalized comparison |
+
+Both compilations emitted only the non-fatal stable category
+`discouraged_exception_handling`. Skeleton's zero-order result and the moving
+average observations are cloud-validation facts only; they do not establish
+strategy quality or profitability.
 
 ## Offline LEAN fixture preparation
 
@@ -81,10 +108,11 @@ Push-Location .\lean-workspace
 Pop-Location
 ```
 
-Docker was not healthy during this implementation, so no actual LEAN fixture
-run or `lean_engine_observation` trace has been produced. The comparator remains
-ready for such a trace, but its labelled unit-test candidate is not parity
-evidence.
+The implementation host's local Docker Linux engine was unavailable, so no
+actual LEAN fixture run or `lean_engine_observation` trace has been produced.
+The comparator remains ready for such a trace, but its labelled unit-test
+candidate is not parity evidence. The successful SPY cloud runs do not change
+that limitation.
 
 ## Failure rule
 

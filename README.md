@@ -190,8 +190,9 @@ Downloaded or user-provided market data belongs under ignored `data/local/`,
 `data/raw/`, or `data/processed/` paths. Generated reports, logs, notebook
 outputs, session checkpoints, model files, package metadata, and caches stay ignored.
 LEAN workspace data, Object Store content, backtests, optimizations, live output,
-and caches are also ignored. A credential-free `lean-workspace/lean.json` may be
-tracked only after preflight and manual review.
+and caches are also ignored. `lean-workspace/lean.json` is operator-local linkage
+state: keep it ignored, preserve any needed backup outside the repository, and
+never force-add it.
 The CLI accepts in-repository reports only under `reports/` and logs only under
 `logs/`; absolute output paths outside the repository are allowed. Ignored
 repository-root `.pytest-*` and `.pytest_*` trees are reserved as automated-test

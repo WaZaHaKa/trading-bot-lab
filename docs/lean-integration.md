@@ -1,7 +1,8 @@
 # LEAN integration guide
 
 Status: **LEAN cloud engine validation completed for both SPY research projects;
-identical-data parity remains pending and live trading remains prohibited.**
+the pinned local parity runtime is prepared, identical-data execution remains
+pending, and live trading remains prohibited.**
 
 LEAN is the primary cross-asset research engine. The local Python CSV engine
 remains an independent deterministic oracle and must not be deleted or changed
@@ -179,7 +180,7 @@ Those commands are the already completed SPY cloud-validation workflow. They do
 not authorize a `ParityFixtureV1` push, cloud backtest, or Object Store action.
 Any such action requires a later explicit operator approval.
 
-## Identical-data preparation and future execution
+## Identical-data preparation and pinned local execution
 
 The offline preparer validates the committed fixture's LF bytes, schema version,
 rows, and exact hash, then atomically copies those same bytes to the ignored
@@ -195,29 +196,44 @@ Generated LEAN output stays under ignored `backtests/`; raw logs stay under
 `logs/`; normalized local and LEAN traces stay under `reports/` until explicitly
 sanitized and reviewed.
 
-During a separately authorized local session, the manual sequence is:
+The Linux-only operator is the authoritative local path. Its default invocation is
+a read-only preflight. Pull, preparation, execution, and comparison each require
+their exact public authorization phrase:
 
-```powershell
-$LeanExe = (Resolve-Path ".\.venv\Scripts\lean.exe").Path
+```bash
+python scripts/run_lean_parity_local.py
 
-python scripts\export_local_parity.py `
-  --output reports\parity\local-v1.json
+python scripts/run_lean_parity_local.py pull \
+  --pull-authorization pull-pinned-lean-parity-image
 
-New-Item -ItemType Directory -Force .\logs\parity | Out-Null
-Push-Location .\lean-workspace
-& $LeanExe backtest "Strategies/ParityFixtureV1" --no-update `
-  --output ".\Strategies\ParityFixtureV1\backtests\parity-v1" |
-  Tee-Object -FilePath "..\logs\parity\lean-v1.log"
-Pop-Location
+python scripts/run_lean_parity_local.py prepare \
+  --prepare-authorization prepare-exact-parity-fixture
 
-python scripts\extract_lean_parity.py `
-  --input logs\parity\lean-v1.log `
-  --output reports\parity\lean-v1.json
+python scripts/run_lean_parity_local.py run \
+  --run-authorization execute-pinned-parity-v1
 
-python scripts\compare_lean_parity.py `
-  --local-trace reports\parity\local-v1.json `
-  --lean-trace reports\parity\lean-v1.json
+python scripts/run_lean_parity_local.py compare \
+  --compare-authorization compare-exact-parity-v1
 ```
+
+The runtime accepts only LEAN CLI `1.0.227` and
+`quantconnect/lean@sha256:c03e9acab0ef6bd67cd44b968d10c40c13f4079164b8fe02148de45dbd0c0649`
+for `linux/amd64`, whose expected platform manifest is
+`sha256:6cdc4112fa14ed99eca5c313bc84c8008cc07d6143e25b3f6ddeb01df2501f0e`.
+It validates the explicit rootless Unix socket and daemon identity, refuses
+system Docker, disables CLI database updates, and uses a private temporary HOME
+without credentials. Host HTTP and HTTPS are forced to a failing local proxy
+while the Docker SDK must still reach the rootless Unix socket.
+
+A process-local compatibility guard for the audited CLI strips its generated
+identity and broker defaults, runs from a temporary copy of the public project,
+prevents an implicit image pull or bridge network, and validates the realized
+container before starting it. The engine has `network_mode=none`, no published
+ports, no host namespace, no Docker socket or credential mount, all capabilities
+dropped, `no-new-privileges`, and bounded memory, CPU, and process count.
+Ignored state permits one pull and at most five executions, rejects parallel
+runs, and cleanup requires a current-run sentinel. Windows can validate the
+contract but intentionally refuses Linux Docker execution.
 
 LEAN must emit exactly one bounded line prefixed
 `TRADING_BOT_LAB_LEAN_PARITY_V1:`. The strict extractor accepts only its

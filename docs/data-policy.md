@@ -39,6 +39,14 @@ copies those exact LF bytes only to
 symlinks, unsafe destinations, and differing existing output. It never converts,
 downloads, uploads, or repairs data.
 
+The pinned local operator writes runtime state and raw CLI logs only under
+ignored `logs/parity/`, normalized observations and audits only under ignored
+`reports/parity/`, and raw engine results only under the dedicated project's
+ignored `backtests/`. Its temporary project copy and credential-free HOME are
+removed only when the current-run sentinel is present. The operator never
+stages, repairs, sorts, or transforms fixture bytes, and the engine container
+has no network path from which it could obtain other data.
+
 `ParityFixtureV1` defaults to that local file. A later cloud run may explicitly
 select Object Store only when an operator has manually placed the same exact
 bytes at the fixed key

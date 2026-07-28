@@ -133,7 +133,7 @@ numeric LEAN version; visible bars; signals and next-open intents; fills, fees
 and slippage; cash, position, average cost, realized and unrealized PnL, equity,
 exposure and drawdown; risk events; and final pending-signal status.
 
-## Preparation and future manual execution
+## Preparation and pinned local execution
 
 Preparation is offline and copies the exact fixture bytes, after validation, to
 the ignored local default path:
@@ -148,30 +148,32 @@ the exact SHA-256, uses atomic replacement, and rejects unsafe paths and
 symlinks. It is idempotent and never invokes LEAN, Docker, QuantConnect, Object
 Store, a network, or a paid-data operation.
 
-During a later, separately authorized local engine session, run only the
-dedicated project with the default local transport and keep all output ignored:
+The Linux-only operator is the authoritative execution boundary. A bare command
+runs only read-only preflight; each mutating phase requires its exact public
+authorization phrase:
 
-```powershell
-$LeanExe = (Resolve-Path ".\.venv\Scripts\lean.exe").Path
-
-python scripts\export_local_parity.py `
-  --output reports\parity\local-v1.json
-
-New-Item -ItemType Directory -Force .\logs\parity | Out-Null
-Push-Location .\lean-workspace
-& $LeanExe backtest "Strategies/ParityFixtureV1" --no-update `
-  --output ".\Strategies\ParityFixtureV1\backtests\parity-v1" |
-  Tee-Object -FilePath "..\logs\parity\lean-v1.log"
-Pop-Location
-
-python scripts\extract_lean_parity.py `
-  --input logs\parity\lean-v1.log `
-  --output reports\parity\lean-v1.json
-
-python scripts\compare_lean_parity.py `
-  --local-trace reports\parity\local-v1.json `
-  --lean-trace reports\parity\lean-v1.json
+```bash
+python scripts/run_lean_parity_local.py
+python scripts/run_lean_parity_local.py pull \
+  --pull-authorization pull-pinned-lean-parity-image
+python scripts/run_lean_parity_local.py prepare \
+  --prepare-authorization prepare-exact-parity-fixture
+python scripts/run_lean_parity_local.py run \
+  --run-authorization execute-pinned-parity-v1
+python scripts/run_lean_parity_local.py compare \
+  --compare-authorization compare-exact-parity-v1
 ```
+
+The contract accepts one immutable OCI index and its one `linux/amd64`
+platform manifest, LEAN CLI `1.0.227`, and the explicit user-owned rootless
+Docker socket. The host CLI gets a private credential-free HOME and failing
+HTTP/HTTPS proxy while Docker SDK access to the Unix socket must still succeed.
+The realized engine container is validated before start with no network,
+published ports, privilege, host namespaces, Docker socket, credentials, or
+mounts beyond the exact temporary project, data, output, and CLI paths.
+One ignored state file permits only the authorized pull and at most five
+serialized executions. Raw logs, runtime audits, normalized traces, comparison
+output, and engine results remain ignored.
 
 For a later, separately authorized cloud run, the operator must first place the
 same exact fixture bytes at the fixed Object Store key using an explicitly

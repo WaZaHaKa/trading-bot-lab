@@ -48,6 +48,12 @@ sequence can begin.
 
 ## Current validation boundary
 
+The pinned Linux operator validates the exact fixture, immutable LEAN image,
+rootless daemon, credential-free CLI config, blocked host HTTP/HTTPS, and
+networkless unprivileged container before an engine run. It serializes at most
+five executions and preserves raw output only under ignored paths. These
+runtime controls do not themselves prove timing parity.
+
 Source inspection and deterministic synthetic tests establish only that the
 dedicated input, timing, observation, and comparison boundaries are prepared.
 No local or cloud LEAN engine has executed `ParityFixtureV1`, and no Object Store

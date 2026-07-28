@@ -2,6 +2,14 @@
 
 - Cloud authentication, organization membership, and project linkage remain
   external operator state; repository tests cannot prove them.
+- The local parity operator is intentionally limited to Linux, LEAN CLI
+  `1.0.227`, one immutable `linux/amd64` image, and the explicitly validated
+  user-owned rootless Docker daemon. Windows runs contract tests but refuses
+  local Docker execution.
+- Host-side HTTP/HTTPS isolation uses a process-local failing proxy because an
+  unprivileged network namespace is unavailable on the authorized host. It is
+  validated immediately before execution; the engine container independently
+  uses `network_mode=none`.
 - LEAN cloud data and engine versions can change independently of this source.
 - The completed cloud baseline covers one daily US equity using QuantConnect
   SPY data, not crypto or a multi-asset portfolio.

@@ -493,3 +493,52 @@ The next separately authorized step is one manual `ParityFixtureV1` LEAN run,
 strict extraction of its ignored prefixed observation, and comparison against a
 fresh local-oracle trace. Walk-forward validation, optimization, Object Store
 automation, broker paper trading, and live trading remain out of scope.
+
+## 2026-07-28 - Pinned rootless LEAN parity runtime
+
+### Hypothesis
+
+No profitability hypothesis is being tested. This checkpoint makes the first
+genuine local identical-data run reproducible and fail-closed before any image
+pull or engine execution occurs.
+
+### Runtime and safety
+
+The operator pins LEAN CLI `1.0.227`, one immutable OCI index, its
+`linux/amd64` platform manifest, the exact fixture and normalized-bar hashes,
+and the explicit rootless Docker endpoint. Its default phase is read-only.
+Pull, fixture/oracle preparation, LEAN execution, and comparison require
+separate exact authorization phrases.
+
+The CLI runs with a private credential-free HOME, database updates disabled,
+host HTTP/HTTPS forced to fail, and Docker SDK access revalidated in that exact
+environment. A process-local guard removes CLI-injected identity and broker
+defaults, uses a temporary public project copy, prevents implicit pulls and
+bridge networking, and inspects the realized container before start. The engine
+has no network, published port, privilege, host namespace, Docker socket,
+credential, or unrelated mount.
+
+### Validation status
+
+Focused deterministic tests cover immutable image and manifest identity,
+rootless-daemon rejection, authorizations, bounded and serialized execution,
+fixture bytes, generated configuration sanitization, mount and environment
+safety, realized-container auditing, ignored outputs, narrow cleanup, read-only
+default behavior, and Windows refusal before Docker access. Full repository
+validation is required before the runtime contract is committed.
+
+No image pull, genuine LEAN run, cloud command, Object Store operation, market
+data download, optimization, broker connection, or live deployment occurred in
+this implementation checkpoint. Identical-data parity remains pending.
+
+### Decision
+
+Research-only runtime contract prepared for validation. It is not parity
+evidence and is not a paper- or live-trading candidate.
+
+### Notes
+
+After a clean committed checkpoint, the separately authorized operator phases
+may perform the one pinned image pull and a bounded genuine execution. Raw logs,
+engine output, runtime audits, normalized traces, and comparisons remain ignored
+until a distinct sanitization and review step.

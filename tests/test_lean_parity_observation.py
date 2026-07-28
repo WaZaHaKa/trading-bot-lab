@@ -68,6 +68,36 @@ def test_extracts_one_observation_and_never_copies_surrounding_logs(
     assert "ordinary LEAN output" not in first.read_text(encoding="utf-8")
 
 
+def test_extracts_one_bounded_line_wrapped_observation(
+    tmp_path: Path,
+    lean_trace: dict[str, Any],
+) -> None:
+    payload = _payload(lean_trace)
+    wrapped = b"\n".join(payload[offset : offset + 79] for offset in range(0, len(payload), 79))
+    source = tmp_path / "wrapped.log"
+    source.write_bytes(
+        b"ordinary LEAN output\n"
+        + LEAN_OBSERVATION_PREFIX.encode("ascii")
+        + wrapped
+        + b"\nordinary trailing output\n"
+    )
+
+    output = extract_lean_parity_observation(source, tmp_path / "wrapped.json")
+
+    assert parse_lean_parity_log(source) == lean_trace
+    assert output.read_text(encoding="utf-8") == deterministic_json(lean_trace)
+
+
+def test_rejects_wrapped_payload_over_the_total_size_limit(tmp_path: Path) -> None:
+    oversized = b"{" + b"x" * MAX_LEAN_OBSERVATION_PAYLOAD_BYTES
+    wrapped = b"\n".join(oversized[offset : offset + 79] for offset in range(0, len(oversized), 79))
+    source = tmp_path / "wrapped-oversized.log"
+    source.write_bytes(LEAN_OBSERVATION_PREFIX.encode("ascii") + wrapped + b"\n")
+
+    with pytest.raises(LeanParityObservationError, match="size limit"):
+        parse_lean_parity_log(source)
+
+
 def test_public_candidate_validator_reuses_the_v1_contract(
     lean_trace: dict[str, Any],
 ) -> None:

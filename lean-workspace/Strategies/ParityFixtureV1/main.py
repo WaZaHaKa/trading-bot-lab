@@ -4,7 +4,7 @@ import csv
 import json
 import re
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation, ROUND_DOWN
+from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_HALF_EVEN
 from hashlib import sha256
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NamedTuple
@@ -67,6 +67,7 @@ MAX_DRAWDOWN = Decimal("0.05")
 MONEY_PRECISION = 8
 QUANTITY_PRECISION = 0
 STRATEGY_HISTORY_LIMIT = 100
+MONEY_QUANTUM = Decimal("0.00000001")
 LEAN_VERSION_PATTERN = re.compile(r"^[0-9]+(?:\.[0-9]+)+$")
 
 
@@ -309,6 +310,86 @@ class TrailingSignalState:
         return target
 
 
+def parity_money(value: Decimal) -> Decimal:
+    """Apply the local engine's fixed eight-place money precision."""
+
+    return value.quantize(MONEY_QUANTUM, rounding=ROUND_HALF_EVEN)
+
+
+def cost_aware_target_quantity(
+    *,
+    target_weight: Decimal,
+    reference_price: Decimal,
+    current_quantity: Decimal,
+    cash: Decimal,
+) -> Decimal:
+    """Mirror the local engine's integer target sizing without LEAN buffers."""
+
+    values = (target_weight, reference_price, current_quantity, cash)
+    if any(not value.is_finite() for value in values):
+        raise ValueError("parity sizing inputs must be finite")
+    if reference_price <= 0 or current_quantity < 0 or cash < 0:
+        raise ValueError("parity sizing inputs must be nonnegative with a positive price")
+    if target_weight < 0 or target_weight > MAX_POSITION_WEIGHT:
+        raise ValueError("parity target weight is outside the long-only contract")
+    current_units = current_quantity.to_integral_value(rounding=ROUND_DOWN)
+    if current_units != current_quantity:
+        raise ValueError("parity holdings must use whole shares")
+    if target_weight == 0:
+        return Decimal("0")
+
+    equity = parity_money(cash + current_quantity * reference_price)
+    if equity <= 0:
+        return Decimal("0")
+    raw_target_units = (target_weight * equity / reference_price).to_integral_value(
+        rounding=ROUND_DOWN
+    )
+    current_market_value = parity_money(current_quantity * reference_price)
+    current_weight = current_market_value / equity
+    if current_weight <= target_weight:
+        low = int(current_units)
+        high = max(low, int(raw_target_units))
+    else:
+        low = 0
+        high = int(current_units)
+
+    best_units: int | None = None
+    while low <= high:
+        candidate_units = (low + high) // 2
+        candidate_quantity = Decimal(candidate_units)
+        delta = abs(candidate_quantity - current_quantity)
+        candidate_market_value = parity_money(candidate_quantity * reference_price)
+        execution_notional = Decimal("0")
+        is_buy = candidate_quantity > current_quantity
+        if delta == 0:
+            projected_cash = cash
+        else:
+            direction = Decimal("1") if is_buy else Decimal("-1")
+            execution_price = reference_price * (
+                Decimal("1") + direction * SLIPPAGE_BPS / Decimal("10000")
+            )
+            execution_notional = delta * execution_price
+            cash_notional = parity_money(execution_notional)
+            fee = parity_money(execution_notional * FEE_BPS / Decimal("10000"))
+            projected_cash = parity_money(
+                cash - cash_notional - fee if is_buy else cash + cash_notional - fee
+            )
+        projected_equity = parity_money(projected_cash + candidate_market_value)
+        order_within_limit = not is_buy or execution_notional / equity <= MAX_ORDER_NOTIONAL_WEIGHT
+        candidate_is_safe = (
+            projected_equity > 0
+            and candidate_market_value / projected_equity <= target_weight
+            and order_within_limit
+            and (not is_buy or (candidate_market_value > 0 and execution_notional > 0))
+        )
+        if candidate_is_safe:
+            best_units = candidate_units
+            low = candidate_units + 1
+        else:
+            high = candidate_units - 1
+    return Decimal("0") if best_units is None else Decimal(best_units)
+
+
 class ParityFixtureData(PythonData):
     """One strict custom-data parser shared by local and Object Store sources."""
 
@@ -531,16 +612,17 @@ class ParityFixtureV1(QCAlgorithm):
     def _execute_pending(self, pending: PendingSignal, bar: FixtureBar) -> None:
         if pending.timestamp >= bar.timestamp:
             raise RuntimeError("a parity signal cannot execute on its own bar")
-        raw_quantity = Decimal(
-            str(self.calculate_order_quantity(self._symbol, float(pending.target_weight)))
-        )
-        quantity = raw_quantity.to_integral_value(rounding=ROUND_DOWN)
-        if raw_quantity != quantity:
-            raise RuntimeError("LEAN produced a non-integer v1 parity order quantity")
-        if quantity == 0:
-            return
         holdings = self.portfolio[self._symbol]
         current_quantity = Decimal(str(holdings.quantity))
+        target_quantity = cost_aware_target_quantity(
+            target_weight=pending.target_weight,
+            reference_price=bar.open,
+            current_quantity=current_quantity,
+            cash=Decimal(str(self.portfolio.cash)),
+        )
+        quantity = target_quantity - current_quantity
+        if quantity == 0:
+            return
         projected_quantity = current_quantity + quantity
         if projected_quantity < 0:
             raise RuntimeError("parity order would create a short position")
@@ -744,6 +826,9 @@ class ParityFixtureV1(QCAlgorithm):
             self._halt_reasons = tuple(reasons)
 
         position_value = Decimal(str(holdings.holdings_value))
+        unrealized_profit = parity_money(
+            Decimal(str(holdings.quantity)) * (bar.close - Decimal(str(holdings.average_price)))
+        )
         exposure = abs(position_value) / equity if equity > 0 else Decimal("0")
         self._bars.append(
             {
@@ -769,7 +854,7 @@ class ParityFixtureV1(QCAlgorithm):
                 "symbol": SYMBOL,
                 "target_weight_for_next_bar": canonical_decimal(target),
                 "timestamp": bar.timestamp,
-                "unrealized_pnl": canonical_decimal(holdings.unrealized_profit),
+                "unrealized_pnl": canonical_decimal(unrealized_profit),
                 "volume": canonical_decimal(bar.volume),
             }
         )

@@ -4,6 +4,7 @@ import ast
 import importlib.util
 import json
 import sys
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 from types import ModuleType
@@ -567,6 +568,32 @@ def test_parity_signal_is_trailing_next_row_only_and_final_signal_expires(
     assert state.pending is not None
     assert state.pending.timestamp == "2024-01-11T00:00:00+00:00"
     assert module.canonical_decimal(state.pending.target_weight) == "0.1"
+
+
+def test_parity_cost_aware_sizing_matches_local_integer_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_parity_with_algorithm_stubs(monkeypatch)
+
+    assert module.cost_aware_target_quantity(
+        target_weight=Decimal("0.1"),
+        reference_price=Decimal("104"),
+        current_quantity=Decimal("0"),
+        cash=Decimal("100000"),
+    ) == Decimal("96")
+    assert module.cost_aware_target_quantity(
+        target_weight=Decimal("0.1"),
+        reference_price=Decimal("103"),
+        current_quantity=Decimal("96"),
+        cash=Decimal("90013.0048"),
+    ) == Decimal("96")
+    assert module.cost_aware_target_quantity(
+        target_weight=Decimal("0"),
+        reference_price=Decimal("98"),
+        current_quantity=Decimal("96"),
+        cash=Decimal("90013.0048"),
+    ) == Decimal("0")
+    assert "calculate_order_quantity" not in _source(PARITY)
 
 
 def test_parity_observation_serialization_is_stable_bounded_and_prefixed(

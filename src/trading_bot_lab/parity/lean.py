@@ -6,7 +6,7 @@ import json
 import re
 from math import isfinite
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from trading_bot_lab.artifacts import atomic_write_text
 from trading_bot_lab.parity.compare import (
@@ -128,23 +128,68 @@ def _read_single_payload(input_log: Path) -> bytes:
                 raise LeanParityObservationError(
                     "input log must contain exactly one prefixed LEAN parity observation"
                 )
-            line = raw_line
-            if line.endswith(b"\n"):
-                line = line[:-1]
-            if line.endswith(b"\r"):
-                line = line[:-1]
+            line = _strip_line_ending(raw_line)
             selected = line[len(_PREFIX_BYTES) :]
             if not selected:
                 raise LeanParityObservationError("LEAN parity observation payload is empty")
-            if len(selected) > MAX_LEAN_OBSERVATION_PAYLOAD_BYTES:
-                raise LeanParityObservationError(
-                    "LEAN parity observation payload exceeds the fixed size limit"
-                )
+            selected = _read_wrapped_payload(selected, handle)
     if selected is None:
         raise LeanParityObservationError(
             "input log must contain exactly one prefixed LEAN parity observation"
         )
     return selected
+
+
+def _read_wrapped_payload(initial: bytes, handle: BinaryIO) -> bytes:
+    payload = bytearray(initial)
+    if len(payload) > MAX_LEAN_OBSERVATION_PAYLOAD_BYTES:
+        raise LeanParityObservationError(
+            "LEAN parity observation payload exceeds the fixed size limit"
+        )
+    while not _json_object_is_complete(payload):
+        raw_line = handle.readline(_MAX_LEAN_LOG_LINE_BYTES + 1)
+        if not raw_line:
+            break
+        payload.extend(_strip_line_ending(raw_line))
+        if len(payload) > MAX_LEAN_OBSERVATION_PAYLOAD_BYTES:
+            raise LeanParityObservationError(
+                "LEAN parity observation payload exceeds the fixed size limit"
+            )
+    return bytes(payload)
+
+
+def _strip_line_ending(line: bytes) -> bytes:
+    if line.endswith(b"\n"):
+        line = line[:-1]
+    if line.endswith(b"\r"):
+        line = line[:-1]
+    return line
+
+
+def _json_object_is_complete(payload: bytes | bytearray) -> bool:
+    if not payload or payload[0] != ord("{"):
+        return True
+    depth = 0
+    in_string = False
+    escaped = False
+    for byte in payload:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif byte == ord("\\"):
+                escaped = True
+            elif byte == ord('"'):
+                in_string = False
+            continue
+        if byte == ord('"'):
+            in_string = True
+        elif byte in (ord("{"), ord("[")):
+            depth += 1
+        elif byte in (ord("}"), ord("]")):
+            depth -= 1
+            if depth <= 0:
+                return True
+    return False
 
 
 def _decode_canonical_payload(payload: bytes) -> dict[str, Any]:

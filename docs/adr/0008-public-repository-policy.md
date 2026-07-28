@@ -30,4 +30,3 @@ treated as public information.
 
 Repository preflight is defense in depth, not a substitute for GitHub secret
 scanning, push protection, history review, or manual diff review.
-

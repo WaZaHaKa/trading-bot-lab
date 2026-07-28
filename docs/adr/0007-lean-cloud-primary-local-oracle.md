@@ -60,4 +60,3 @@ password, key, or credential file may enter the repository.
 ## Next safe milestone
 
 Walk-forward validation using LEAN cloud backtests and local parity checks.
-

@@ -90,4 +90,3 @@ not block this cloud-first sprint.
 See `windows-lean-setup.md`, `qcc-guardrails.md`,
 `execution-timing-comparison.md`, `risk-policy-mapping.md`, and
 `cross-engine-parity.md`.
-

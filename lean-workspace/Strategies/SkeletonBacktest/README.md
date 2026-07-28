@@ -17,4 +17,3 @@ Contract:
 Acceptance evidence is a successful cloud compile/backtest with zero orders and
 at least one completed SPY bar. Do not infer strategy performance from this
 connectivity smoke test.
-

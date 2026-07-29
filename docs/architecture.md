@@ -150,11 +150,12 @@ flowchart LR
     F --> A["Deterministic descriptive aggregate"]
 ```
 
-One valid private `wf-v1-spy-2021` Download Results JSON exists outside the
-repository and must not be rerun. This importer change performs no cloud work.
-No operator phase executes LEAN or network work. `extract`/`aggregate` preserve
-the canonical-log path; `extract-result`/`aggregate-result` are separate offline
-phases for official Download Results JSON.
+Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` Download Results JSON
+files exist outside the repository and must not be rerun. This importer change
+performs no cloud work. No operator phase executes LEAN or network work.
+`extract`/`aggregate` preserve the canonical-log path;
+`extract-result`/`aggregate-result` are separate offline phases for official
+Download Results JSON.
 
 `walk_forward/contract.py` validates the canonical manifest, exact five folds,
 schema/source/configuration hashes, and fixed settings.

@@ -4,6 +4,16 @@
       "pattern": "^(?:0|-?(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$",
       "type": "string"
     },
+    "centPrecisionNonNegativeDecimal": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/nonNegativeDecimal"
+        },
+        {
+          "pattern": "^(?:0|[0-9]+(?:\\.[0-9]{1,2})?)$"
+        }
+      ]
+    },
     "nonNegativeDecimal": {
       "allOf": [
         {
@@ -42,6 +52,19 @@
         "properties": {
           "metrics": {
             "properties": {
+              "directly_reported": {
+                "properties": {
+                  "fee_precision": {
+                    "const": "order_event_amount_precision"
+                  },
+                  "fee_validation_source": {
+                    "const": "order_events"
+                  },
+                  "order_event_fee_evidence_available": {
+                    "const": true
+                  }
+                }
+              },
               "unavailable": {
                 "const": [
                   "algorithm_risk_halt_state",
@@ -74,6 +97,22 @@
         "properties": {
           "metrics": {
             "properties": {
+              "directly_reported": {
+                "properties": {
+                  "fee_precision": {
+                    "const": "rounded_to_cent"
+                  },
+                  "fee_validation_source": {
+                    "const": "overview_runtime_rounded"
+                  },
+                  "order_event_fee_evidence_available": {
+                    "const": false
+                  },
+                  "total_fees_usd": {
+                    "$ref": "#/$defs/centPrecisionNonNegativeDecimal"
+                  }
+                }
+              },
               "unavailable": {
                 "const": [
                   "algorithm_risk_halt_state",
@@ -192,12 +231,27 @@
             "ending_equity_usd": {
               "$ref": "#/$defs/nonNegativeDecimal"
             },
+            "fee_precision": {
+              "enum": [
+                "order_event_amount_precision",
+                "rounded_to_cent"
+              ]
+            },
+            "fee_validation_source": {
+              "enum": [
+                "order_events",
+                "overview_runtime_rounded"
+              ]
+            },
             "maximum_drawdown": {
               "$ref": "#/$defs/nonNegativeDecimal"
             },
             "order_count": {
               "minimum": 0,
               "type": "integer"
+            },
+            "order_event_fee_evidence_available": {
+              "type": "boolean"
             },
             "probabilistic_sharpe_ratio": {
               "$ref": "#/$defs/nonNegativeDecimal"
@@ -217,8 +271,11 @@
           },
           "required": [
             "ending_equity_usd",
+            "fee_precision",
+            "fee_validation_source",
             "maximum_drawdown",
             "order_count",
+            "order_event_fee_evidence_available",
             "probabilistic_sharpe_ratio",
             "sharpe_ratio",
             "sortino_ratio",

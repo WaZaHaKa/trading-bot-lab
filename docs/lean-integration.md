@@ -366,29 +366,39 @@ chart, then emits only sanitized content-bound fields. Configuration timestamps
 may identify any UTC instant on the fixed start/end calendar date. It accepts the official
 array or `x`/`y` Benchmark point encodings and permits bounded UTC
 `outOfSampleMaxEndDate` metadata only when out-of-sample days remain zero. Results
-with `orderEvents` retain event-level reconciliation; official downloads without
-them require filled orders, `lastFillTime`, state/statistics count agreement,
-non-short chronological position derivation, and aggregate fee reconciliation.
-The normalized `order_validation_source` distinguishes those paths and records
-missing event detail as unavailable. Safe CLI failures include only the fixed
-validation reason. The importer never copies private IDs, URLs, hostnames,
-account metadata, credentials, paths, or raw order IDs.
+with `orderEvents` sum actual event fees as authoritative and reconcile both
+rounded fee displays within USD `0.01`. Official downloads without events
+require `statistics.Total Fees` and the absolute runtime fee display to be
+cent-aligned and mutually consistent within USD `0.01`; that Overview value is
+the normalized whole-backtest fee. The closed-trade
+`tradeStatistics.totalFees` field remains validated but is discarded and never
+represented as transaction-level evidence.
+
+Without events, the importer also requires filled orders, `lastFillTime`,
+state/statistics count agreement, and non-short chronological position
+derivation. Normalized fee source, precision, and event-evidence availability
+are bound separately from `order_validation_source`, which distinguishes the
+fill-validation paths and records missing event detail as unavailable. Safe CLI
+failures include only the fixed validation reason. The importer never copies
+private IDs, URLs, hostnames, account metadata, credentials, paths, or raw order
+IDs.
 A completed observation additionally proves the final eligible exchange close
 was processed, so partial or trailing-data-outage runs fail closed. Aggregation
 requires all five folds, presents each fold before descriptive summaries, and
 reports runtime consistency separately. Contract completion is not strategy
 approval and no arbitrary performance threshold exists.
 
-A valid private `wf-v1-spy-2021` Download Results JSON exists outside the
-repository and must not be rerun. Download it manually from the completed
-result's Overview tab, keep the full file private/untracked, and import it with:
+Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` Download Results JSON
+files exist outside the repository and must not be rerun. Download Results are
+obtained manually from each completed result's Overview tab; keep every full
+file private/untracked and import it with:
 
 ```bash
 python scripts/run_walk_forward_v1.py extract-result \
   --input-result <quantconnect-result.json> \
-  --output reports/walk-forward/v1/spy-2021.json
+  --output reports/walk-forward/v1/<fold-id>.json
 python scripts/run_walk_forward_v1.py validate \
-  --result-observation reports/walk-forward/v1/spy-2021.json
+  --result-observation reports/walk-forward/v1/<fold-id>.json
 ```
 
 This importer change executes zero cloud backtests, optimizations, data

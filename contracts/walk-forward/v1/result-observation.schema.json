@@ -22,6 +22,73 @@
   "$id": "urn:trading-bot-lab:walk-forward:v1:result-observation",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "orders": {
+            "properties": {
+              "order_validation_source": {
+                "const": "order_events"
+              }
+            },
+            "required": [
+              "order_validation_source"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "properties": {
+              "unavailable": {
+                "const": [
+                  "algorithm_risk_halt_state",
+                  "engine_version",
+                  "estimated_slippage_usd",
+                  "rejected_order_count"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "orders": {
+            "properties": {
+              "order_validation_source": {
+                "const": "completed_orders"
+              }
+            },
+            "required": [
+              "order_validation_source"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "properties": {
+              "unavailable": {
+                "const": [
+                  "algorithm_risk_halt_state",
+                  "engine_version",
+                  "estimated_slippage_usd",
+                  "rejected_order_count",
+                  "order_event_detail"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "configuration": {
       "additionalProperties": false,
@@ -161,11 +228,24 @@
           "type": "object"
         },
         "unavailable": {
-          "const": [
-            "algorithm_risk_halt_state",
-            "engine_version",
-            "estimated_slippage_usd",
-            "rejected_order_count"
+          "oneOf": [
+            {
+              "const": [
+                "algorithm_risk_halt_state",
+                "engine_version",
+                "estimated_slippage_usd",
+                "rejected_order_count"
+              ]
+            },
+            {
+              "const": [
+                "algorithm_risk_halt_state",
+                "engine_version",
+                "estimated_slippage_usd",
+                "rejected_order_count",
+                "order_event_detail"
+              ]
+            }
           ],
           "type": "array"
         }
@@ -192,12 +272,19 @@
             "cash",
             "long"
           ]
+        },
+        "order_validation_source": {
+          "enum": [
+            "completed_orders",
+            "order_events"
+          ]
         }
       },
       "required": [
         "completed_order_count",
         "final_position_quantity",
-        "final_position_state"
+        "final_position_state",
+        "order_validation_source"
       ],
       "type": "object"
     },

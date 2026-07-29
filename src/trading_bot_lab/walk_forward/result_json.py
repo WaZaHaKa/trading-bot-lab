@@ -62,6 +62,8 @@ _UNAVAILABLE_FIELDS = (
     "estimated_slippage_usd",
     "rejected_order_count",
 )
+_ORDER_EVENT_DETAIL_UNAVAILABLE = "order_event_detail"
+_ORDER_VALIDATION_SOURCES = frozenset({"completed_orders", "order_events"})
 _OUTPUT_PRIVATE_KEYS = frozenset(
     {
         "account_id",
@@ -197,8 +199,10 @@ def normalize_result_observation(
     }:
         raise WalkForwardResultError("result observation state must be completed")
 
-    metrics = _normalize_output_metrics(payload["metrics"])
     orders = _normalize_output_orders(payload["orders"])
+    metrics = _normalize_output_metrics(
+        payload["metrics"], order_validation_source=orders["order_validation_source"]
+    )
     return {
         "configuration": expected_configuration,
         "evaluation_end": fold.evaluation_end,
@@ -411,8 +415,7 @@ def _normalize_download_result(
         raise WalkForwardResultError("algorithm account type must be cash")
     if configuration.get("outOfSampleDays") != 0:
         raise WalkForwardResultError("out-of-sample days must be zero")
-    if configuration.get("outOfSampleMaxEndDate") not in {None, ""}:
-        raise WalkForwardResultError("out-of-sample maximum end date must be empty")
+    _validate_optional_utc_metadata_timestamp(configuration.get("outOfSampleMaxEndDate"))
     if _parse_configuration_date(configuration.get("startDate"), "startDate") != date.fromisoformat(
         fold.evaluation_start
     ):
@@ -426,14 +429,27 @@ def _normalize_download_result(
     orders = _validate_orders_and_events(payload, fold.evaluation_start, fold.evaluation_end)
     if orders["order_count"] != reported["order_count"]:
         raise WalkForwardResultError("reported order count disagrees with official orders")
-    if orders["total_fees_usd"] != Decimal(reported["total_fees_usd"]):
+    state_order_count = state.get("OrderCount")
+    if state_order_count is not None:
+        if _integer_text(state_order_count, "state.OrderCount") != orders["order_count"]:
+            raise WalkForwardResultError("state order count disagrees with official orders")
+    elif orders["order_validation_source"] == "completed_orders":
+        raise WalkForwardResultError("state order count is required without order events")
+    if orders["event_total_fees_usd"] is not None and orders["event_total_fees_usd"] != Decimal(
+        reported["total_fees_usd"]
+    ):
         raise WalkForwardResultError("reported fees disagree with official order events")
     _validate_available_position_state(
         payload,
         orders,
         ending_equity=Decimal(str(reported["ending_equity_usd"])),
+        reported_total_fees=Decimal(str(reported["total_fees_usd"])),
         total_return=Decimal(derived["total_return"]),
     )
+
+    unavailable = list(_UNAVAILABLE_FIELDS)
+    if orders["order_validation_source"] == "completed_orders":
+        unavailable.append(_ORDER_EVENT_DETAIL_UNAVAILABLE)
 
     observation = {
         "configuration": {
@@ -449,12 +465,13 @@ def _normalize_download_result(
         "metrics": {
             "derived": derived,
             "directly_reported": reported,
-            "unavailable": list(_UNAVAILABLE_FIELDS),
+            "unavailable": unavailable,
         },
         "orders": {
             "completed_order_count": orders["completed_order_count"],
             "final_position_quantity": canonical_decimal(orders["final_position_quantity"]),
             "final_position_state": ("cash" if orders["final_position_quantity"] == 0 else "long"),
+            "order_validation_source": orders["order_validation_source"],
         },
         "protocol": {
             "content_sha256": bundle.manifest_sha256,
@@ -578,9 +595,21 @@ def _extract_benchmark(
     points: list[tuple[datetime, Decimal]] = []
     prior: datetime | None = None
     for index, value in enumerate(values):
-        point = _mapping(value, f"Benchmark.values[{index}]")
-        timestamp = _chart_timestamp(point.get("x"), f"Benchmark.values[{index}].x")
-        amount = _decimal(point.get("y"), f"Benchmark.values[{index}].y")
+        if isinstance(value, Mapping):
+            if set(value) != {"x", "y"}:
+                raise WalkForwardResultError("Benchmark point object must contain exactly x and y")
+            raw_timestamp = value["x"]
+            raw_amount = value["y"]
+        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            if len(value) != 2:
+                raise WalkForwardResultError(
+                    "Benchmark point array must contain exactly two values"
+                )
+            raw_timestamp, raw_amount = value
+        else:
+            raise WalkForwardResultError("Benchmark point has an unsupported shape")
+        timestamp = _chart_timestamp(raw_timestamp, f"Benchmark.values[{index}].timestamp")
+        amount = _numeric_decimal(raw_amount, f"Benchmark.values[{index}].value")
         if amount <= 0:
             raise WalkForwardResultError("Benchmark values must be positive")
         if prior is not None and timestamp <= prior:
@@ -612,6 +641,7 @@ def _validate_orders_and_events(
     start = date.fromisoformat(evaluation_start)
     end = date.fromisoformat(evaluation_end)
     orders: dict[int, dict[str, Any]] = {}
+    events_present = "orderEvents" in payload
     for index, raw in enumerate(order_values):
         order = _mapping(raw, f"orders[{index}]")
         order_id = _integer(order.get("id"), f"orders[{index}].id")
@@ -632,12 +662,17 @@ def _validate_orders_and_events(
         if abs(value - quantity * price) > _ROUNDED_CURRENCY_TOLERANCE:
             raise WalkForwardResultError("order value disagrees with quantity and price")
         orders[order_id] = {
+            "price": price,
             "quantity": quantity,
             "status": status,
             "time": timestamp,
+            "value": value,
         }
 
-    events_value = payload.get("orderEvents")
+    if not events_present:
+        return _validate_completed_orders_without_events(orders, order_values, start, end)
+
+    events_value = payload["orderEvents"]
     if isinstance(events_value, (str, bytes)) or not isinstance(events_value, Sequence):
         raise WalkForwardResultError("result orderEvents must be an array")
     if len(events_value) > _MAX_ORDERS * 10:
@@ -691,9 +726,44 @@ def _validate_orders_and_events(
             raise WalkForwardResultError("completed orders create an unsupported short position")
     return {
         "completed_order_count": completed,
+        "event_total_fees_usd": total_fees,
         "final_position_quantity": position,
         "order_count": len(orders),
-        "total_fees_usd": total_fees,
+        "order_validation_source": "order_events",
+    }
+
+
+def _validate_completed_orders_without_events(
+    orders: Mapping[int, Mapping[str, Any]],
+    order_values: Sequence[object],
+    start: date,
+    end: date,
+) -> dict[str, Any]:
+    ordered_fills: list[tuple[datetime, int, Decimal]] = []
+    for index, (order_id, parsed_order) in enumerate(orders.items()):
+        raw_order = _mapping(order_values[index], f"orders[{index}]")
+        if parsed_order["status"] != 3:
+            raise WalkForwardResultError("orders without order events must all be filled")
+        if parsed_order["price"] <= 0:
+            raise WalkForwardResultError("filled orders require a positive fill price")
+        last_fill_time = _utc_timestamp(
+            raw_order.get("lastFillTime"), f"orders[{index}].lastFillTime"
+        )
+        if not start <= last_fill_time.date() <= end:
+            raise WalkForwardResultError("order fill timestamp falls outside the declared fold")
+        ordered_fills.append((last_fill_time, order_id, parsed_order["quantity"]))
+
+    position = Decimal("0")
+    for _timestamp, _order_id, quantity in sorted(ordered_fills):
+        position += quantity
+        if position < 0:
+            raise WalkForwardResultError("completed orders create an unsupported short position")
+    return {
+        "completed_order_count": len(orders),
+        "event_total_fees_usd": None,
+        "final_position_quantity": position,
+        "order_count": len(orders),
+        "order_validation_source": "completed_orders",
     }
 
 
@@ -702,6 +772,7 @@ def _validate_available_position_state(
     orders: Mapping[str, Any],
     *,
     ending_equity: Decimal,
+    reported_total_fees: Decimal,
     total_return: Decimal,
 ) -> None:
     runtime = _mapping(payload.get("runtimeStatistics"), "result.runtimeStatistics")
@@ -720,11 +791,11 @@ def _validate_available_position_state(
     position = orders["final_position_quantity"]
     if (position == 0) != (holdings == 0):
         raise WalkForwardResultError("final order position disagrees with available result state")
-    if abs(fees - orders["total_fees_usd"]) > _ROUNDED_CURRENCY_TOLERANCE:
-        raise WalkForwardResultError("runtime fees disagree with official order events")
+    if abs(fees - reported_total_fees) > _ROUNDED_CURRENCY_TOLERANCE:
+        raise WalkForwardResultError("runtime fees disagree with official performance")
 
 
-def _normalize_output_metrics(value: object) -> dict[str, Any]:
+def _normalize_output_metrics(value: object, *, order_validation_source: str) -> dict[str, Any]:
     metrics = _mapping(value, "result observation.metrics")
     _require_exact_fields(
         metrics, {"derived", "directly_reported", "unavailable"}, "result observation.metrics"
@@ -798,16 +869,19 @@ def _normalize_output_metrics(value: object) -> dict[str, Any]:
     }:
         raise WalkForwardResultError("normalized result derived metrics are inconsistent")
     unavailable = metrics["unavailable"]
+    expected_unavailable = list(_UNAVAILABLE_FIELDS)
+    if order_validation_source == "completed_orders":
+        expected_unavailable.append(_ORDER_EVENT_DETAIL_UNAVAILABLE)
     if (
         not isinstance(unavailable, Sequence)
         or isinstance(unavailable, (str, bytes))
-        or list(unavailable) != list(_UNAVAILABLE_FIELDS)
+        or list(unavailable) != expected_unavailable
     ):
         raise WalkForwardResultError("normalized unavailable fields differ from the fixed contract")
     return {
         "derived": normalized_derived,
         "directly_reported": dict(sorted(normalized_reported.items())),
-        "unavailable": list(_UNAVAILABLE_FIELDS),
+        "unavailable": expected_unavailable,
     }
 
 
@@ -815,7 +889,12 @@ def _normalize_output_orders(value: object) -> dict[str, Any]:
     orders = _mapping(value, "result observation.orders")
     _require_exact_fields(
         orders,
-        {"completed_order_count", "final_position_quantity", "final_position_state"},
+        {
+            "completed_order_count",
+            "final_position_quantity",
+            "final_position_state",
+            "order_validation_source",
+        },
         "result observation.orders",
     )
     count = orders["completed_order_count"]
@@ -829,10 +908,14 @@ def _normalize_output_orders(value: object) -> dict[str, Any]:
     state = orders["final_position_state"]
     if state not in {"cash", "long"} or ((state == "cash") != (Decimal(quantity) == 0)):
         raise WalkForwardResultError("normalized final position state is inconsistent")
+    source = orders["order_validation_source"]
+    if source not in _ORDER_VALIDATION_SOURCES:
+        raise WalkForwardResultError("normalized order validation source is unsupported")
     return {
         "completed_order_count": count,
         "final_position_quantity": quantity,
         "final_position_state": state,
+        "order_validation_source": source,
     }
 
 
@@ -1039,6 +1122,12 @@ def _decimal(value: object, path: str) -> Decimal:
     return selected
 
 
+def _numeric_decimal(value: object, path: str) -> Decimal:
+    if not isinstance(value, (int, float, Decimal)) or isinstance(value, bool):
+        raise WalkForwardResultError(f"{path} must be a finite JSON number")
+    return _decimal(value, path)
+
+
 def _canonical_decimal_string(value: object, path: str) -> str:
     if not isinstance(value, str):
         raise WalkForwardResultError(f"{path} must be a canonical decimal string")
@@ -1072,15 +1161,34 @@ def _is_cash_account(value: object) -> bool:
 
 def _parse_configuration_date(value: object, path: str) -> date:
     selected = _nonempty_string(value, f"algorithmConfiguration.{path}")
+    if len(selected) > 64:
+        raise WalkForwardResultError(f"algorithmConfiguration.{path} is not an ISO date")
     try:
         if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", selected):
             return date.fromisoformat(selected)
         parsed = datetime.fromisoformat(selected.replace("Z", "+00:00"))
     except ValueError as exc:
         raise WalkForwardResultError(f"algorithmConfiguration.{path} is not an ISO date") from exc
-    if parsed.time() != datetime.min.time():
-        raise WalkForwardResultError(f"algorithmConfiguration.{path} must be a midnight date")
-    return parsed.date()
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise WalkForwardResultError(f"algorithmConfiguration.{path} must be UTC")
+    return parsed.astimezone(UTC).date()
+
+
+def _validate_optional_utc_metadata_timestamp(value: object) -> None:
+    if value in {None, ""}:
+        return
+    selected = _nonempty_string(value, "algorithmConfiguration.outOfSampleMaxEndDate")
+    if len(selected) > 64:
+        raise WalkForwardResultError("out-of-sample metadata timestamp is invalid")
+    try:
+        parsed = datetime.fromisoformat(selected.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise WalkForwardResultError("out-of-sample metadata timestamp is invalid") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise WalkForwardResultError("out-of-sample metadata timestamp must be UTC")
+    normalized = parsed.astimezone(UTC)
+    if not datetime.min.replace(tzinfo=UTC) <= normalized <= datetime.max.replace(tzinfo=UTC):
+        raise WalkForwardResultError("out-of-sample metadata timestamp is out of bounds")
 
 
 def _utc_timestamp(value: object, path: str) -> datetime:
@@ -1109,7 +1217,7 @@ def _chart_timestamp(value: object, path: str) -> datetime:
             return datetime.fromtimestamp(int(selected), tz=UTC)
         except (OSError, OverflowError, ValueError) as exc:
             raise WalkForwardResultError(f"{path} must be bounded Unix seconds") from exc
-    return _utc_timestamp(value, path)
+    raise WalkForwardResultError(f"{path} must be bounded Unix seconds")
 
 
 def _order_status(value: object, path: str) -> int:

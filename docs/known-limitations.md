@@ -70,7 +70,9 @@
   external operator state.
 - Download Results JSON cannot prove engine version, algorithm risk-halt state,
   estimated slippage, or rejected-order count. Those fields remain explicitly
-  unavailable; only the canonical algorithm-log format can support them.
+  unavailable; only the canonical algorithm-log format can support them. An
+  official download without `orderEvents` also cannot prove individual event or
+  per-event fee detail; the normalized observation records that limitation.
 - Its five predeclared calendar-year folds evaluate only adjusted daily SPY.
   They do not establish statistical independence, market breadth, or an edge.
 - Warmup may read preceding completed bars, but orders, trades, and evaluation

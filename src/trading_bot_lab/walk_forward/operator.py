@@ -213,8 +213,11 @@ def main(argv: list[str] | None = None) -> int:
     except WalkForwardObservationError:
         print("Error: walk-forward artifact validation failed", file=sys.stderr)
         return 2
-    except WalkForwardResultError:
-        print("Error: QuantConnect result artifact validation failed", file=sys.stderr)
+    except WalkForwardResultError as exc:
+        print(
+            f"Error: QuantConnect result artifact validation failed: {exc}",
+            file=sys.stderr,
+        )
         return 2
     except WalkForwardOperatorError as exc:
         print(f"Error: {exc}", file=sys.stderr)

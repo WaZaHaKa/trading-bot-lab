@@ -46,8 +46,30 @@ def protocol_bundle() -> ProtocolBundle:
     return load_protocol_bundle()
 
 
-def _result() -> dict[str, Any]:
+def _download_result() -> dict[str, Any]:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+def _result() -> dict[str, Any]:
+    payload = _download_result()
+    values = payload["charts"]["Benchmark"]["series"]["Benchmark"]["values"]
+    payload["charts"]["Benchmark"]["series"]["Benchmark"]["values"] = [
+        {"x": point[0], "y": point[1]} for point in values
+    ]
+    payload["orderEvents"] = [
+        {
+            "fillPrice": order["price"],
+            "fillPriceCurrency": "USD",
+            "fillQuantity": order["quantity"],
+            "orderFee": {"value": {"amount": 1, "currency": "USD"}},
+            "orderId": order["id"],
+            "status": order["status"],
+            "symbol": copy.deepcopy(order["symbol"]),
+            "utcTime": order["lastFillTime"],
+        }
+        for order in payload["orders"].values()
+    ]
+    return payload
 
 
 def _write_result(path: Path, payload: object) -> Path:
@@ -73,6 +95,7 @@ def _fold_result(index: int) -> dict[str, Any]:
     payload["algorithmConfiguration"]["parameters"]["fold-id"] = fold_id
     payload["algorithmConfiguration"]["startDate"] = f"{start.isoformat()}T00:00:00Z"
     payload["algorithmConfiguration"]["endDate"] = f"{end.isoformat()}T00:00:00Z"
+    payload["algorithmConfiguration"]["outOfSampleMaxEndDate"] = f"{end.isoformat()}T00:00:00Z"
     payload["charts"]["Benchmark"]["series"]["Benchmark"]["values"][0]["x"] = int(
         datetime.combine(first, datetime.min.time(), UTC).timestamp()
     )
@@ -81,6 +104,7 @@ def _fold_result(index: int) -> dict[str, Any]:
     )
     event_time = f"{year}-07-01T13:30:00Z"
     for order in payload["orders"].values():
+        order["lastFillTime"] = event_time
         order["time"] = event_time
     for event in payload["orderEvents"]:
         event["utcTime"] = event_time
@@ -129,11 +153,20 @@ def test_valid_2021_result_is_strictly_sanitized_and_content_bound(
         "excess_return": "0",
         "total_return": "0.1",
     }
+    assert normalized["metrics"]["unavailable"] == [
+        "algorithm_risk_halt_state",
+        "engine_version",
+        "estimated_slippage_usd",
+        "rejected_order_count",
+        "order_event_detail",
+    ]
     assert normalized["orders"] == {
         "completed_order_count": 2,
         "final_position_quantity": "5",
         "final_position_state": "long",
+        "order_validation_source": "completed_orders",
     }
+    assert "outOfSampleMaxEndDate" not in deterministic_json(normalized)
     serialized = deterministic_json(normalized).casefold()
     for forbidden in (
         "backtest_id",
@@ -144,6 +177,31 @@ def test_valid_2021_result_is_strictly_sanitized_and_content_bound(
         "user_id",
     ):
         assert forbidden not in serialized
+
+
+def test_official_end_of_day_configuration_timestamp_matches_calendar_fold(
+    protocol_bundle: ProtocolBundle,
+) -> None:
+    payload = _download_result()
+
+    assert payload["algorithmConfiguration"]["endDate"].endswith("23:59:59.999999Z")
+    assert parse_result_json(FIXTURE, bundle=protocol_bundle)["evaluation_end"] == "2021-12-31"
+
+
+def test_order_event_variant_preserves_event_level_validation(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    normalized = parse_result_json(
+        _write_result(tmp_path / "event-result.json", _result()), bundle=protocol_bundle
+    )
+
+    assert normalized["orders"]["order_validation_source"] == "order_events"
+    assert normalized["metrics"]["unavailable"] == [
+        "algorithm_risk_halt_state",
+        "engine_version",
+        "estimated_slippage_usd",
+        "rejected_order_count",
+    ]
 
 
 def test_result_extraction_is_deterministic_and_round_trips(
@@ -246,6 +304,198 @@ def test_result_rejects_final_short_position(
 
     with pytest.raises(WalkForwardResultError, match="short"):
         parse_result_json(_write_result(tmp_path / "short.json", payload), bundle=protocol_bundle)
+
+
+@pytest.mark.parametrize(
+    "mutate, message",
+    [
+        (
+            lambda value: value["algorithmConfiguration"].__setitem__(
+                "outOfSampleMaxEndDate", "not-an-iso-timestamp"
+            ),
+            "metadata timestamp is invalid",
+        ),
+        (
+            lambda value: value["algorithmConfiguration"].__setitem__(
+                "outOfSampleMaxEndDate", "2021-12-31T00:00:00+01:00"
+            ),
+            "metadata timestamp must be UTC",
+        ),
+        (
+            lambda value: value["algorithmConfiguration"].__setitem__("outOfSampleDays", 1),
+            "out-of-sample days must be zero",
+        ),
+    ],
+)
+def test_result_rejects_invalid_oos_metadata(
+    tmp_path: Path,
+    protocol_bundle: ProtocolBundle,
+    mutate: Any,
+    message: str,
+) -> None:
+    payload = _download_result()
+    mutate(payload)
+
+    with pytest.raises(WalkForwardResultError, match=message):
+        parse_result_json(
+            _write_result(tmp_path / "invalid-oos.json", payload), bundle=protocol_bundle
+        )
+
+
+@pytest.mark.parametrize(
+    "point",
+    [
+        [1609718400, 100, 1],
+        {"x": 1609718400, "y": 100, "extra": 1},
+        ["1609718400", 100],
+        [1609718400, "100"],
+        None,
+    ],
+)
+def test_result_rejects_invalid_official_benchmark_point_shapes(
+    tmp_path: Path, protocol_bundle: ProtocolBundle, point: object
+) -> None:
+    payload = _download_result()
+    payload["charts"]["Benchmark"]["series"]["Benchmark"]["values"][0] = point
+
+    with pytest.raises(WalkForwardResultError, match="Benchmark"):
+        parse_result_json(
+            _write_result(tmp_path / "invalid-benchmark.json", payload), bundle=protocol_bundle
+        )
+
+
+def test_completed_orders_require_fill_time_and_reconcile_counts(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    missing_time = _download_result()
+    missing_time["orders"]["1"].pop("lastFillTime")
+    with pytest.raises(WalkForwardResultError, match="lastFillTime"):
+        parse_result_json(
+            _write_result(tmp_path / "missing-fill-time.json", missing_time),
+            bundle=protocol_bundle,
+        )
+
+    malformed_time = _download_result()
+    malformed_time["orders"]["1"]["lastFillTime"] = "not-an-iso-timestamp"
+    with pytest.raises(WalkForwardResultError, match="ISO timestamp"):
+        parse_result_json(
+            _write_result(tmp_path / "malformed-fill-time.json", malformed_time),
+            bundle=protocol_bundle,
+        )
+
+    missing_state_count = _download_result()
+    missing_state_count["state"].pop("OrderCount")
+    with pytest.raises(WalkForwardResultError, match="required without order events"):
+        parse_result_json(
+            _write_result(tmp_path / "missing-state-count.json", missing_state_count),
+            bundle=protocol_bundle,
+        )
+
+    wrong_state_count = _download_result()
+    wrong_state_count["state"]["OrderCount"] = 3
+    with pytest.raises(WalkForwardResultError, match="state order count"):
+        parse_result_json(
+            _write_result(tmp_path / "wrong-state-count.json", wrong_state_count),
+            bundle=protocol_bundle,
+        )
+
+    wrong_statistics_count = _download_result()
+    wrong_statistics_count["statistics"]["Total Orders"] = "3"
+    with pytest.raises(WalkForwardResultError, match="reported order count"):
+        parse_result_json(
+            _write_result(tmp_path / "wrong-statistics-count.json", wrong_statistics_count),
+            bundle=protocol_bundle,
+        )
+
+
+@pytest.mark.parametrize(
+    "field, value, message",
+    [
+        ("status", 5, "must all be filled"),
+        ("price", 0, "positive fill price"),
+    ],
+)
+def test_completed_orders_require_filled_status_and_positive_price(
+    tmp_path: Path,
+    protocol_bundle: ProtocolBundle,
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    payload = _download_result()
+    payload["orders"]["1"][field] = value
+    if field == "price":
+        payload["orders"]["1"]["value"] = 0
+
+    with pytest.raises(WalkForwardResultError, match=message):
+        parse_result_json(
+            _write_result(tmp_path / f"invalid-completed-order-{field}.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+def test_completed_orders_reject_short_intermediate_position(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _download_result()
+    payload["orders"]["1"]["quantity"] = -5
+    payload["orders"]["1"]["value"] = -500
+    payload["orders"]["2"]["quantity"] = 10
+    payload["orders"]["2"]["value"] = 1100
+
+    with pytest.raises(WalkForwardResultError, match="short"):
+        parse_result_json(
+            _write_result(tmp_path / "intermediate-short.json", payload), bundle=protocol_bundle
+        )
+
+
+@pytest.mark.parametrize(
+    "field, value, message",
+    [
+        ("statistics", "$3.00", "statistics.Total Fees"),
+        ("runtimeStatistics", "-$3.00", "runtime fees"),
+    ],
+)
+def test_completed_orders_reconcile_authoritative_aggregate_fees(
+    tmp_path: Path,
+    protocol_bundle: ProtocolBundle,
+    field: str,
+    value: str,
+    message: str,
+) -> None:
+    payload = _download_result()
+    if field == "statistics":
+        payload[field]["Total Fees"] = value
+    else:
+        payload[field]["Fees"] = value
+
+    with pytest.raises(WalkForwardResultError, match=message):
+        parse_result_json(
+            _write_result(tmp_path / f"wrong-{field}-fees.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+def test_cli_exposes_only_specific_safe_result_validation_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    payload = _download_result()
+    private_marker = "synthetic-private-marker-must-not-appear"
+    payload["privateExternalValue"] = private_marker
+    payload["algorithmConfiguration"]["outOfSampleMaxEndDate"] = "invalid"
+    source = _write_result(tmp_path / "invalid.json", payload)
+
+    result = walk_forward_operator.main(["validate", "--input-result", str(source)])
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert captured.out == ""
+    assert captured.err == (
+        "Error: QuantConnect result artifact validation failed: "
+        "out-of-sample metadata timestamp is invalid\n"
+    )
+    assert private_marker not in captured.err
+    assert str(source) not in captured.err
 
 
 def test_result_rejects_non_finite_json_number(

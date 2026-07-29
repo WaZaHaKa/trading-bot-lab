@@ -64,10 +64,11 @@
   robustness, or strategy-quality claim.
 - No optimization, Monte Carlo result, profitability claim, broker paper
   deployment, or live deployment exists in this sprint.
-- Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` Download Results JSON
-  files exist outside the repository and must not be rerun. They are not tracked
-  evidence. The remaining three folds, a normalized exact-five aggregate, and
-  engine/data availability remain external operator state.
+- All five official 2021-2025 Download Results JSON files were imported and
+  validated offline and must not be rerun. The raw downloads and normalized
+  working observations remain private and untracked. Only the sanitized,
+  content-bound aggregate at
+  `contracts/walk-forward/v1/2026-07-29-result-aggregate.json` is public.
 - Download Results JSON cannot prove engine version, algorithm risk-halt state,
   estimated slippage, or rejected-order count. Those fields remain explicitly
   unavailable; only the canonical algorithm-log format can support them. An
@@ -93,6 +94,7 @@ financial advice, and do not predict future results.
 The corrected rerun consumed one additional execution, leaving the permanent
 cumulative count at six; the authorized second execution was not used, and no
 image pull occurred. Its successful exact-fixture evidence remains historical.
-The next walk-forward gate is human review and separate authorization of exactly
-five printed cloud commands. Object Store, data transfer, optimization, broker,
-paper, live, and deployment work remain outside this protocol.
+The remaining governance step is human review of the tracked sanitized
+aggregate and this evidence change. No rerun is authorized. Object Store, data
+transfer, optimization, broker, paper, live, and deployment work remain outside
+this protocol.

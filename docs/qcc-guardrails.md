@@ -22,9 +22,10 @@ The parity-data preparer is an offline format conversion of the committed
 synthetic CSV. It does not call LEAN, Docker, QuantConnect, or a network and has
 no QCC cost. Its ignored output is not licensed market data.
 
-## Required manual gate
+## Historical two-backtest manual gate
 
-Before each cloud backtest:
+The following gate governed the completed two-backtest activation sprint. It
+does not authorize another execution:
 
 1. Run repository preflight.
 2. Confirm the project path and diff.
@@ -36,34 +37,28 @@ Before each cloud backtest:
 Cloud and local backtests are hypothetical. They place no real orders, make no
 profitability claim, and are not financial advice.
 
-## Future fixed walk-forward gate
+## Completed fixed walk-forward gate
 
-The two-project gate above is retained as completed historical activation
-procedure. It does not authorize the new walk-forward plan.
+The five authorized backtests named `wf-v1-spy-2021` through
+`wf-v1-spy-2025` completed in a separate operator phase after the private
+project source and public configuration matched merged repository state. They
+must not be rerun.
 
-`python scripts/run_walk_forward_v1.py print-cloud-commands` is print-only and
-network-free. It outputs exactly five future backtests named
-`wf-v1-spy-2021` through `wf-v1-spy-2025`, scoped through the untracked private
-environment placeholder `"$LEAN_WALK_FORWARD_PROJECT_ID"`. Every command omits
-`--push` and contains exactly `fold-id=<fixed-fold>` plus
-`optimization-mode=false`. The helper has no executable cloud-run phase and is
-never called by CI or `make check` to start work.
+`python scripts/run_walk_forward_v1.py print-cloud-commands` remains a
+network-free print-only representation of that closed command set. It has no
+cloud-run phase, never uses `--push`, and is not called by `make check` or CI to
+start work.
 
-A later human authorization must cover exactly those five printed commands.
-Before any command, re-run preflight, review the source/configuration hashes and
-private project mapping, verify the one fold/name pair, and confirm the command
-contains no force, verbose, open, optimization, live, data-download, or Object
-Store option. Stop if the printer output differs or the project is not safely
-linked.
+No further cloud execution is authorized by this evidence phase. Data transfer
+or purchase, Object Store, optimization, arbitrary project changes,
+broker/exchange connections, paper trading, and live trading remain prohibited.
+This offline phase executes no cloud command and consumes no QCC.
 
-That future authorization would permit only the named cloud backtests. It would
-not authorize `lean data`, `--download-data`, dataset purchases, Object Store
-reads/writes, arbitrary pushes/projects/dates, optimization, a broker/exchange
-connection, paper trading, or live trading. Raw output must remain ignored;
-only separately reviewed sanitized content-bound evidence may be tracked.
+All five full Download Results JSON files, cloud IDs, URLs, and account metadata
+remain private and outside the repository. Normalized per-fold working records
+and the generated working aggregate stay ignored. Only the separately reviewed
+sanitized aggregate is tracked at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`.
 
-Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` results already exist
-and must not be rerun. They remain outside the repository; their full Download
-Results JSON, IDs, URLs, and account metadata are never tracked. The offline
-importer phase consumes no QCC and executes no cloud command. No profitability
-conclusion or paper/live approval exists.
+The completed aggregate is descriptive research evidence, not a profitability,
+robustness, paper-readiness, or live-readiness approval.

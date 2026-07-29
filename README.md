@@ -38,9 +38,10 @@ fixed-parameter rolling evaluation to five calendar-year SPY folds that were
 declared before any fold result was observed. The workflow is not optimization:
 all folds retain the same strategy, risk, cost, account, data, and execution
 settings. Its implementation and offline validation include separate canonical-log
-and QuantConnect Download Results import paths. Valid private 2021 and 2022
-results exist outside the repository and must not be rerun; they are not
-tracked evidence.
+and QuantConnect Download Results import paths. All five official 2021-2025
+results were imported and validated offline; the private downloads and ignored
+working observations must not be tracked or rerun. The reviewed sanitized
+aggregate is tracked under `contracts/walk-forward/v1/`.
 
 The pre-existing `lean/` tree remains preserved. See
 `docs/lean-integration.md` and ADR 0007.
@@ -123,8 +124,9 @@ python scripts/preflight_check.py
 
 LEAN setup and the already completed two-project activation history are
 documented in `docs/windows-lean-setup.md` and `docs/lean-integration.md`. The
-walk-forward helper can print a separate five-command future plan, but cannot
-execute it. Cloud commands are never part of `make check` or CI.
+walk-forward helper can still print the closed five-command plan but cannot
+execute it. All five authorized runs are complete and must not be rerun. Cloud
+commands are never part of `make check` or CI.
 
 ## CLI examples
 
@@ -180,18 +182,20 @@ python scripts\run_walk_forward_v1.py validate
 python scripts\run_walk_forward_v1.py print-cloud-commands
 ```
 
-The other local phases process already-existing ignored evidence after a future
-authorized session: `extract` normalizes one raw log, `aggregate` requires all
-five exact fold observations, and `evidence` recomputes and displays the
-aggregate. They do not invoke LEAN or a network. Raw logs and cloud output stay
-ignored; only separately reviewed, sanitized, content-bound evidence may be
-tracked.
+The result phases process the manually downloaded official JSON entirely
+offline: `extract-result` normalizes one fold, `aggregate-result` requires the
+exact five folds, and `evidence-result` fully recomputes the aggregate. The
+parallel `extract`/`aggregate`/`evidence` phases retain the canonical-log
+contract. None invokes LEAN or a network.
 
-Actual execution of the five printed commands requires separate human
-authorization for exactly that bounded set. No authorization exists in this
-implementation phase, and the helper deliberately has no cloud-run phase. No
-data or Object Store operation, broker/exchange connection, paper trade, or
-live trade is part of this workflow.
+All five authorized cloud runs are complete. Their raw Download Results files
+and normalized working observations remain private and ignored, and no fold may
+be rerun. The separately reviewed sanitized aggregate is tracked at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`. Its descriptive
+metrics do not establish profitability, robustness, paper readiness, or live
+readiness. The helper deliberately has no cloud-run phase, and no data or Object
+Store operation, broker/exchange connection, paper trade, or live trade is part
+of the offline evidence workflow.
 
 ## Execution and accounting assumptions
 
@@ -251,7 +255,9 @@ Walk-forward tests close the five-fold manifest, fixed parameters and dates,
 warmup isolation, trailing-only signals, next-open timing, no-liquidation halt
 behavior, source/configuration hashes, bounded single-observation extraction,
 identity rejection, exact-five aggregation, runtime-drift reporting, atomic
-writes, raw-output ignores, and the print-only command boundary.
+writes, raw-output ignores, the print-only command boundary, and deterministic
+privacy-safe recomputation of the tracked exact-five Download Results
+aggregate.
 
 CI runs Python 3.11, Ruff, pytest, preflight, LEAN source/config static checks,
 parity-contract tests, and walk-forward contract/static tests on Ubuntu and
@@ -287,12 +293,12 @@ Additional LEAN and cross-engine limitations are maintained in
 
 ## Roadmap
 
-Fixed walk-forward v1 is implemented and locally testable, with the five folds
-and all parameters frozen before results. Only a later, separate authorization
-may start exactly five bounded LEAN cloud backtests; evidence review then occurs
-offline. There is currently no walk-forward result, profitability or robustness
-conclusion, or paper/live readiness. Live trading is not a recommended next
-milestone.
+Fixed walk-forward v1 is complete for its five predeclared 2021-2025 cloud
+folds. The official results were imported, validated, aggregated, and reduced
+to one reviewed sanitized tracked record; all raw files and working observations
+remain private and ignored. No rerun is authorized. The descriptive evidence
+is not a profitability or robustness conclusion and creates no paper/live
+readiness. Live trading is not a recommended next milestone.
 
 ## License
 

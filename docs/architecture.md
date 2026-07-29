@@ -142,20 +142,23 @@ the local oracle or historical parity path:
 flowchart LR
     P["Immutable v1 protocol and hashes"] --> W["Dedicated LEAN project"]
     P --> O["Offline operator"]
-    O --> C["Exactly five printed future commands"]
-    C --> H["Separate human authorization"]
-    H -. "future manual execution only" .-> R["Ignored raw logs/results"]
+    O --> C["Closed five-command plan"]
+    C --> H["Completed authorized manual execution"]
+    H --> R["Ignored private Download Results"]
     R --> E["Bounded strict extractor"]
     E --> F["Five sanitized fold observations"]
     F --> A["Deterministic descriptive aggregate"]
+    A --> T["Reviewed tracked sanitized aggregate"]
 ```
 
-Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` Download Results JSON
-files exist outside the repository and must not be rerun. This importer change
-performs no cloud work. No operator phase executes LEAN or network work.
-`extract`/`aggregate` preserve the canonical-log path;
+All five official 2021-2025 Download Results JSON files were imported and
+validated after their authorized runs completed. The raw files and normalized
+working observations remain private and ignored, and no fold may be rerun. This
+offline evidence phase performs no cloud work; no repository helper phase
+executes LEAN or network work. `extract`/`aggregate` preserve the canonical-log path;
 `extract-result`/`aggregate-result` are separate offline phases for official
-Download Results JSON.
+Download Results JSON. The reviewed exact-five aggregate is tracked at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`.
 
 `walk_forward/contract.py` validates the canonical manifest, exact five folds,
 schema/source/configuration hashes, and fixed settings.
@@ -179,8 +182,9 @@ final eligible exchange close in the public interval; an early stop or trailing
 data outage fails closed.
 
 Risk halts latch without automatic liquidation, cancel pending work, and retain
-valuation of an existing long. Raw engine artifacts remain ignored; only
-separately reviewed sanitized content-bound evidence may be tracked. Runtime
-drift is explicit aggregate metadata rather than a hidden pass threshold. No
-component promotes the strategy or claims profitability, robustness, paper
-readiness, or live readiness.
+valuation of an existing long. Raw engine artifacts remain ignored; the only
+tracked walk-forward result is the separately reviewed sanitized aggregate at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`. Runtime drift is
+explicit aggregate metadata rather than a hidden pass threshold. No component
+promotes the strategy or claims profitability, robustness, paper readiness, or
+live readiness.

@@ -15,15 +15,18 @@ Small local utility scripts only.
   network-isolated local LEAN parity phases.
 - `run_walk_forward_v1.py`: exposes one typed, offline walk-forward operator.
   Its phases are `plan`, `validate`, `print-cloud-commands`, `extract`,
-  `aggregate`, and `evidence`; the default is the read-only `plan`.
+  `aggregate`, `evidence`, `extract-result`, `aggregate-result`, and
+  `evidence-result`; the default is the read-only `plan`.
 
-The walk-forward command printer emits exactly five named future cloud
-backtests for the closed `spy-2021` through `spy-2025` fold set. It does not
-execute a process, and there is no cloud-run phase. The extract and aggregate
-phases accept bounded regular files, reject symlink/reparse paths, and write
-atomically only below ignored `reports/walk-forward/v1`; aggregate output cannot
-replace a fold input. Aggregation requires all five observations. Actual cloud
-execution requires separate human authorization for the exact five printed
-commands. No script in this directory automates optimization, data
-download/upload, Object Store,
-broker/exchange access, paper trading, or live trading.
+The walk-forward command printer still emits the exact five named cloud
+backtests for the closed `spy-2021` through `spy-2025` fold set, but it does not
+execute a process and there is no cloud-run phase. Those five runs are complete
+and must not be rerun. The extract and aggregate phase pairs accept bounded
+regular files, reject symlink/reparse paths, and write atomically only below
+ignored `reports/walk-forward/v1`; aggregate output cannot replace a fold
+input. Aggregation requires all five observations. The reviewed Download
+Results aggregate is tracked separately at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`; raw downloads and
+working observations remain private and ignored. No script in this directory
+automates optimization, data download/upload, Object Store, broker/exchange
+access, paper trading, or live trading.

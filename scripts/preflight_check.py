@@ -68,6 +68,7 @@ REQUIRED_FILES = [
     "contracts/walk-forward/v1/aggregate-record.schema.json",
     "contracts/walk-forward/v1/result-observation.schema.json",
     "contracts/walk-forward/v1/result-aggregate-record.schema.json",
+    "contracts/walk-forward/v1/2026-07-29-result-aggregate.json",
     "tests/test_lean_local_parity_evidence.py",
     "src/trading_bot_lab/parity/__init__.py",
     "src/trading_bot_lab/parity/contract.py",
@@ -94,6 +95,7 @@ REQUIRED_FILES = [
     "scripts/run_walk_forward_v1.py",
     "tests/fixtures/walk-forward/v1/quantconnect-result-spy-2021.json",
     "tests/test_walk_forward_result_json.py",
+    "tests/test_walk_forward_result_evidence.py",
     "lean-workspace/README.md",
     "lean-workspace/Strategies/SkeletonBacktest/main.py",
     "lean-workspace/Strategies/SkeletonBacktest/README.md",
@@ -343,6 +345,7 @@ EXPECTED_TRACKABLE_PATHS = (
     "contracts/walk-forward/v1/aggregate-record.schema.json",
     "contracts/walk-forward/v1/result-observation.schema.json",
     "contracts/walk-forward/v1/result-aggregate-record.schema.json",
+    "contracts/walk-forward/v1/2026-07-29-result-aggregate.json",
     "src/trading_bot_lab/walk_forward/__init__.py",
     "src/trading_bot_lab/walk_forward/contract.py",
     "src/trading_bot_lab/walk_forward/observation.py",
@@ -351,6 +354,7 @@ EXPECTED_TRACKABLE_PATHS = (
     "scripts/run_walk_forward_v1.py",
     "tests/fixtures/walk-forward/v1/quantconnect-result-spy-2021.json",
     "tests/test_walk_forward_result_json.py",
+    "tests/test_walk_forward_result_evidence.py",
 )
 
 

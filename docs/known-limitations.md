@@ -64,15 +64,18 @@
   robustness, or strategy-quality claim.
 - No optimization, Monte Carlo result, profitability claim, broker paper
   deployment, or live deployment exists in this sprint.
-- One valid private `wf-v1-spy-2021` Download Results JSON exists outside the
-  repository and must not be rerun. It is not tracked evidence. The other four
-  folds, a normalized exact-five aggregate, and engine/data availability remain
-  external operator state.
+- Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` Download Results JSON
+  files exist outside the repository and must not be rerun. They are not tracked
+  evidence. The remaining three folds, a normalized exact-five aggregate, and
+  engine/data availability remain external operator state.
 - Download Results JSON cannot prove engine version, algorithm risk-halt state,
   estimated slippage, or rejected-order count. Those fields remain explicitly
   unavailable; only the canonical algorithm-log format can support them. An
   official download without `orderEvents` also cannot prove individual event or
-  per-event fee detail; the normalized observation records that limitation.
+  per-event fee detail. Its normalized total fee is limited to mutually
+  reconciled cent-rounded Overview/runtime evidence. The closed-trade
+  `tradeStatistics.totalFees` field is not represented as verified transaction
+  evidence.
 - Its five predeclared calendar-year folds evaluate only adjusted daily SPY.
   They do not establish statistical independence, market breadth, or an edge.
 - Warmup may read preceding completed bars, but orders, trades, and evaluation

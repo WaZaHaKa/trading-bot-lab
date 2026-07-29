@@ -31,17 +31,31 @@ SPY-only orders, final-position consistency, and an unambiguous Benchmark chart
 spanning the fold. A populated bounded UTC `outOfSampleMaxEndDate` is metadata,
 not evidence of an out-of-sample period when `outOfSampleDays` is zero. Benchmark
 points may use either official `[unix_seconds, value]` arrays or exact `x`/`y`
-objects and normalize identically. It uses precise `totalPerformance` fields in
-preference to display strings. Display ratios may differ by at most `0.0005` and
-currency values by at most USD `0.01`, solely to accommodate QuantConnect's
-published rounding. Total return is recomputed from start/end equity.
+objects and normalize identically. For non-fee metrics it uses precise
+`totalPerformance` fields in preference to display strings. Display ratios may
+differ by at most `0.0005` and currency values by at most USD `0.01`, solely
+to accommodate QuantConnect's published rounding. Total return is recomputed
+from start/end equity.
 
-When `orderEvents` exists, fills and per-event fees are reconciled. When the
-official download omits it, every order must be filled and the importer derives
-the non-short position from `lastFillTime` and order ID, reconciles both official
-order counts, and treats precise aggregate fees as authoritative. Normalized
-records state `order_validation_source`; missing event detail is explicitly
-unavailable and never fabricated.
+`totalPerformance.tradeStatistics.totalFees` is a closed-trade analysis fee
+sum, not whole-backtest transaction-fee evidence. When `orderEvents` exists,
+the importer sums actual event fees and makes that sum authoritative; rounded
+`statistics.Total Fees` and `runtimeStatistics.Fees` displays must each
+reconcile within USD `0.01`. When the official download omits `orderEvents`,
+the absolute Overview/runtime display values must agree within USD `0.01`;
+the Overview value becomes the cent-rounded normalized `total_fees_usd`.
+The trade-analysis fee remains required, bounded, and nonnegative but is
+discarded from normalized public evidence.
+
+Normalized records bind `fee_validation_source` as `order_events` or
+`overview_runtime_rounded`, `fee_precision` as
+`order_event_amount_precision` or `rounded_to_cent`, and
+`order_event_fee_evidence_available` as a boolean. The independent
+`order_validation_source` records whether fills came from `orderEvents` or
+completed orders. Without events, every order must be filled, both official
+order counts must agree, and the importer derives a chronologically non-short
+position from `lastFillTime`. Missing event detail is explicitly unavailable
+and never fabricated.
 
 ## Identities and canonical JSON
 
@@ -85,17 +99,18 @@ future commands using the private environment placeholder
 invokes LEAN, a network, optimization, data download, Object Store, paper
 trading, live trading, or a broker.
 
-A valid private `wf-v1-spy-2021` Download Results JSON exists outside this
-repository and must not be rerun. It is not tracked evidence. Importing it is a
-manual offline operator step after downloading it from the QuantConnect result
-page's Overview tab. The raw file stays private and untracked:
+Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` Download Results JSON
+files exist outside this repository and must not be rerun. They are not tracked
+evidence. Importing either is a manual offline operator step after downloading
+it from the QuantConnect result page's Overview tab. Each raw file stays private
+and untracked:
 
 ```bash
 python scripts/run_walk_forward_v1.py extract-result \
   --input-result <quantconnect-result.json> \
-  --output reports/walk-forward/v1/spy-2021.json
+  --output reports/walk-forward/v1/<fold-id>.json
 python scripts/run_walk_forward_v1.py validate \
-  --result-observation reports/walk-forward/v1/spy-2021.json
+  --result-observation reports/walk-forward/v1/<fold-id>.json
 ```
 
 Download Results JSON supports official completion/configuration, performance,

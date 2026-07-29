@@ -62,8 +62,8 @@ reads/writes, arbitrary pushes/projects/dates, optimization, a broker/exchange
 connection, paper trading, or live trading. Raw output must remain ignored;
 only separately reviewed sanitized content-bound evidence may be tracked.
 
-A valid private `wf-v1-spy-2021` result already exists and must not be rerun.
-It remains outside the repository; its full Download Results JSON, IDs, URLs,
-and account metadata are never tracked. The offline importer phase consumes no
-QCC and executes no cloud command. No profitability conclusion or paper/live
-approval exists.
+Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` results already exist
+and must not be rerun. They remain outside the repository; their full Download
+Results JSON, IDs, URLs, and account metadata are never tracked. The offline
+importer phase consumes no QCC and executes no cloud command. No profitability
+conclusion or paper/live approval exists.

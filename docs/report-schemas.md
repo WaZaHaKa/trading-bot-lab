@@ -166,27 +166,45 @@ selected private cloud source/configuration were verified before execution. The
 attestation contains no private ID, URL, hostname, account, credential, or path.
 
 Directly reported fields are starting/ending equity, maximum drawdown, total
-fees, order count, Sharpe ratio, Sortino ratio, and probabilistic Sharpe ratio.
+fees, fee evidence metadata, order count, Sharpe ratio, Sortino ratio, and
+probabilistic Sharpe ratio. `fee_validation_source`, `fee_precision`, and
+`order_event_fee_evidence_available` bind how the normalized fee was validated,
+its retained precision, and whether transaction-level fee evidence existed.
 Deterministically derived fields are total return, benchmark start/end/return,
 and excess return. Engine version, algorithm risk-halt state, estimated
 slippage, and rejected-order count are explicitly unavailable because Download
 Results JSON cannot support them. The importer never fabricates them.
 
-The importer prefers precise `totalPerformance` values and uses dashboard text
-only for consistency checks. Tolerances are `0.0005` for rounded ratios and USD
-`0.01` for rounded currency displays. It accepts only the two official Benchmark
-point encodings and requires fold coverage. A populated bounded UTC
-`outOfSampleMaxEndDate` remains unreported metadata when out-of-sample days are
-zero.
+For non-fee metrics, the importer prefers precise `totalPerformance` values and
+uses dashboard text only for consistency checks.
+`totalPerformance.tradeStatistics.totalFees` is different: it is summed from
+closed-trade analysis and is not authoritative whole-backtest transaction-fee
+evidence. It remains required, bounded, and nonnegative, then is discarded from
+normalized public evidence.
+
+When `orderEvents` exists, actual event fees are summed and authoritative.
+Both rounded Overview and runtime fee displays must reconcile to that sum within
+USD `0.01`; the normalized source is `order_events` at
+`order_event_amount_precision`. Without `orderEvents`,
+`statistics.Total Fees` and the absolute value of `runtimeStatistics.Fees`
+must be cent-aligned and agree within USD `0.01`. The Overview value becomes
+the cent-rounded normalized total with source `overview_runtime_rounded`.
+The currency tolerance remains USD `0.01`; it is not increased. Ratio
+tolerance remains `0.0005`.
+
+The importer accepts only the two official Benchmark point encodings and
+requires fold coverage. A populated bounded UTC `outOfSampleMaxEndDate`
+remains unreported metadata when out-of-sample days are zero.
 
 `orders.order_validation_source` is `order_events` when event-level fills and
 fees were reconciled. It is `completed_orders` when the official download omitted
 `orderEvents`; that path requires filled SPY orders, valid `lastFillTime`, exact
-state/statistics order counts, aggregate fee consistency, and a chronologically
-non-short position. In the latter case `order_event_detail` is appended to the
-unavailable evidence list. Individual events or fees are never fabricated.
+state/statistics order counts, mutually consistent whole-backtest fee displays,
+and a chronologically non-short position. In the latter case
+`order_event_detail` is appended to the unavailable evidence list. Individual
+events or fees are never fabricated.
 
 `result-aggregate-record.schema.json` requires all five unique fixed folds and
-one source format. Its summaries are descriptive only. A valid private 2021
-Download Results file exists outside the repository and must not be rerun; the
-full file and normalized working record remain untracked and ignored.
+one source format. Its summaries are descriptive only. Valid private 2021 and
+2022 Download Results files exist outside the repository and must not be rerun;
+the full files and normalized working records remain untracked and ignored.

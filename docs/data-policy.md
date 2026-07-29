@@ -149,9 +149,9 @@ Each dataset should eventually have:
 A separately authorized walk-forward cloud backtest may read only
 QuantConnect's cloud-available adjusted daily SPY data. Repository tooling does
 not download, upload, copy, transform, buy, or cache those market-data bytes and
-does not use Object Store. A valid private `wf-v1-spy-2021` result already
-exists outside the repository and must not be rerun. This importer change
-executes no cloud backtest or data operation.
+does not use Object Store. Valid private `wf-v1-spy-2021` and
+`wf-v1-spy-2022` results already exist outside the repository and must not be
+rerun. This importer change executes no cloud backtest or data operation.
 
 The public folds remain the inclusive calendar intervals `spy-2021` through
 `spy-2025` defined in `contracts/walk-forward/v1/protocol.json`. Each project run

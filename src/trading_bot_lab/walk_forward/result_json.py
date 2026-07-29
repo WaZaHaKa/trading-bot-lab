@@ -64,6 +64,8 @@ _UNAVAILABLE_FIELDS = (
 )
 _ORDER_EVENT_DETAIL_UNAVAILABLE = "order_event_detail"
 _ORDER_VALIDATION_SOURCES = frozenset({"completed_orders", "order_events"})
+_FEE_VALIDATION_SOURCES = frozenset({"order_events", "overview_runtime_rounded"})
+_FEE_PRECISIONS = frozenset({"order_event_amount_precision", "rounded_to_cent"})
 _OUTPUT_PRIVATE_KEYS = frozenset(
     {
         "account_id",
@@ -300,7 +302,7 @@ def aggregate_result_observations(
             "median_sortino_ratio": canonical_decimal(_median(sortinos)),
             "median_strategy_return": canonical_decimal(_median(returns)),
             "positive_return_fold_count": sum(value > 0 for value in returns),
-            "total_fees_usd": canonical_decimal(sum(fees, Decimal("0"))),
+            "total_fees_usd": canonical_decimal(_exact_decimal_sum(fees)),
             "total_orders": sum(
                 int(item["metrics"]["directly_reported"]["order_count"]) for item in ordered
             ),
@@ -427,6 +429,12 @@ def _normalize_download_result(
 
     reported, derived = _extract_metrics(payload, fold.evaluation_start, fold.evaluation_end)
     orders = _validate_orders_and_events(payload, fold.evaluation_start, fold.evaluation_end)
+    reported.update(
+        _extract_fee_evidence(
+            payload,
+            event_total_fees_usd=orders["event_total_fees_usd"],
+        )
+    )
     if orders["order_count"] != reported["order_count"]:
         raise WalkForwardResultError("reported order count disagrees with official orders")
     state_order_count = state.get("OrderCount")
@@ -435,15 +443,10 @@ def _normalize_download_result(
             raise WalkForwardResultError("state order count disagrees with official orders")
     elif orders["order_validation_source"] == "completed_orders":
         raise WalkForwardResultError("state order count is required without order events")
-    if orders["event_total_fees_usd"] is not None and orders["event_total_fees_usd"] != Decimal(
-        reported["total_fees_usd"]
-    ):
-        raise WalkForwardResultError("reported fees disagree with official order events")
     _validate_available_position_state(
         payload,
         orders,
         ending_equity=Decimal(str(reported["ending_equity_usd"])),
-        reported_total_fees=Decimal(str(reported["total_fees_usd"])),
         total_return=Decimal(derived["total_return"]),
     )
 
@@ -508,7 +511,7 @@ def _extract_metrics(
         portfolio.get("probabilisticSharpeRatio"),
         "portfolio.probabilisticSharpeRatio",
     )
-    fees = _decimal(trades.get("totalFees"), "tradeStatistics.totalFees")
+    trade_analysis_fees = _decimal(trades.get("totalFees"), "tradeStatistics.totalFees")
     if start_equity != Decimal("100000"):
         raise WalkForwardResultError("result starting equity must be exactly 100000")
     if end_equity <= 0:
@@ -519,8 +522,8 @@ def _extract_metrics(
         raise WalkForwardResultError(
             "result probabilistic Sharpe ratio must be within zero and one"
         )
-    if fees < 0:
-        raise WalkForwardResultError("result total fees must be non-negative")
+    if trade_analysis_fees < 0:
+        raise WalkForwardResultError("tradeStatistics.totalFees must be non-negative")
     derived_return = end_equity / start_equity - Decimal("1")
     if abs(reported_return - derived_return) > _ROUNDED_RATIO_TOLERANCE:
         raise WalkForwardResultError("result return and equity values are contradictory")
@@ -539,9 +542,6 @@ def _extract_metrics(
     )
     _require_dashboard_close(
         statistics.get("Drawdown"), drawdown, "statistics.Drawdown", percent=True
-    )
-    _require_dashboard_close(
-        statistics.get("Total Fees"), fees, "statistics.Total Fees", currency=True
     )
     _require_dashboard_close(statistics.get("Sharpe Ratio"), sharpe, "statistics.Sharpe Ratio")
     _require_dashboard_close(statistics.get("Sortino Ratio"), sortino, "statistics.Sortino Ratio")
@@ -564,7 +564,6 @@ def _extract_metrics(
         "sharpe_ratio": canonical_decimal(sharpe),
         "sortino_ratio": canonical_decimal(sortino),
         "starting_equity_usd": "100000",
-        "total_fees_usd": canonical_decimal(fees),
     }
     derived = {
         "benchmark_ending_value": canonical_decimal(benchmark_end),
@@ -574,6 +573,49 @@ def _extract_metrics(
         "total_return": canonical_decimal(derived_return),
     }
     return reported, derived
+
+
+def _extract_fee_evidence(
+    payload: Mapping[str, object], *, event_total_fees_usd: Decimal | None
+) -> dict[str, object]:
+    statistics = _mapping(payload.get("statistics"), "result.statistics")
+    overview_fees = _dashboard_decimal(statistics.get("Total Fees"), "statistics.Total Fees")
+    if overview_fees < 0:
+        raise WalkForwardResultError("statistics.Total Fees must be non-negative")
+
+    runtime = _mapping(payload.get("runtimeStatistics"), "result.runtimeStatistics")
+    runtime_fees = _dashboard_decimal(runtime.get("Fees"), "runtimeStatistics.Fees").copy_abs()
+    _require_cent_precision(overview_fees, "statistics.Total Fees")
+    _require_cent_precision(runtime_fees, "runtimeStatistics.Fees")
+
+    if event_total_fees_usd is not None:
+        if _decimal_difference_exceeds(
+            overview_fees, event_total_fees_usd, _ROUNDED_CURRENCY_TOLERANCE
+        ):
+            raise WalkForwardResultError(
+                "statistics.Total Fees contradicts authoritative order-event fees"
+            )
+        if _decimal_difference_exceeds(
+            runtime_fees, event_total_fees_usd, _ROUNDED_CURRENCY_TOLERANCE
+        ):
+            raise WalkForwardResultError(
+                "runtimeStatistics.Fees contradicts authoritative order-event fees"
+            )
+        return {
+            "fee_precision": "order_event_amount_precision",
+            "fee_validation_source": "order_events",
+            "order_event_fee_evidence_available": True,
+            "total_fees_usd": canonical_decimal(event_total_fees_usd),
+        }
+
+    if _decimal_difference_exceeds(overview_fees, runtime_fees, _ROUNDED_CURRENCY_TOLERANCE):
+        raise WalkForwardResultError("statistics.Total Fees and runtimeStatistics.Fees disagree")
+    return {
+        "fee_precision": "rounded_to_cent",
+        "fee_validation_source": "overview_runtime_rounded",
+        "order_event_fee_evidence_available": False,
+        "total_fees_usd": canonical_decimal(overview_fees),
+    }
 
 
 def _extract_benchmark(
@@ -678,7 +720,7 @@ def _validate_orders_and_events(
     if len(events_value) > _MAX_ORDERS * 10:
         raise WalkForwardResultError("result contains too many order events")
     fills: dict[int, Decimal] = {order_id: Decimal("0") for order_id in orders}
-    total_fees = Decimal("0")
+    fee_amounts: list[Decimal] = []
     for index, raw in enumerate(events_value):
         event = _mapping(raw, f"orderEvents[{index}]")
         order_id = _integer(event.get("orderId"), f"orderEvents[{index}].orderId")
@@ -699,9 +741,9 @@ def _validate_orders_and_events(
         fee_value = _mapping(fee.get("value"), f"orderEvents[{index}].orderFee.value")
         amount = _decimal(fee_value.get("amount"), f"orderEvents[{index}].fee.amount")
         currency = fee_value.get("currency")
-        if amount < 0 or (currency not in {"USD", ""}):
+        if amount < 0 or currency not in {"USD", ""} or (amount != 0 and currency != "USD"):
             raise WalkForwardResultError("order event fee must be non-negative USD")
-        total_fees += amount
+        fee_amounts.append(amount)
         if status in {2, 3}:
             if fill_quantity == 0 or fill_price <= 0:
                 raise WalkForwardResultError("filled order events require price and quantity")
@@ -726,7 +768,7 @@ def _validate_orders_and_events(
             raise WalkForwardResultError("completed orders create an unsupported short position")
     return {
         "completed_order_count": completed,
-        "event_total_fees_usd": total_fees,
+        "event_total_fees_usd": _exact_decimal_sum(fee_amounts),
         "final_position_quantity": position,
         "order_count": len(orders),
         "order_validation_source": "order_events",
@@ -772,13 +814,11 @@ def _validate_available_position_state(
     orders: Mapping[str, Any],
     *,
     ending_equity: Decimal,
-    reported_total_fees: Decimal,
     total_return: Decimal,
 ) -> None:
     runtime = _mapping(payload.get("runtimeStatistics"), "result.runtimeStatistics")
     holdings = _dashboard_decimal(runtime.get("Holdings"), "runtimeStatistics.Holdings")
     equity = _dashboard_decimal(runtime.get("Equity"), "runtimeStatistics.Equity")
-    fees = abs(_dashboard_decimal(runtime.get("Fees"), "runtimeStatistics.Fees"))
     runtime_return = _dashboard_decimal(
         runtime.get("Return"), "runtimeStatistics.Return", percent=True
     )
@@ -791,8 +831,6 @@ def _validate_available_position_state(
     position = orders["final_position_quantity"]
     if (position == 0) != (holdings == 0):
         raise WalkForwardResultError("final order position disagrees with available result state")
-    if abs(fees - reported_total_fees) > _ROUNDED_CURRENCY_TOLERANCE:
-        raise WalkForwardResultError("runtime fees disagree with official performance")
 
 
 def _normalize_output_metrics(value: object, *, order_validation_source: str) -> dict[str, Any]:
@@ -805,7 +843,10 @@ def _normalize_output_metrics(value: object, *, order_validation_source: str) ->
         reported,
         {
             "ending_equity_usd",
+            "fee_precision",
+            "fee_validation_source",
             "maximum_drawdown",
+            "order_event_fee_evidence_available",
             "order_count",
             "probabilistic_sharpe_ratio",
             "sharpe_ratio",
@@ -816,7 +857,16 @@ def _normalize_output_metrics(value: object, *, order_validation_source: str) ->
         "metrics.directly_reported",
     )
     normalized_reported: dict[str, object] = {}
-    for field in sorted(set(reported) - {"order_count"}):
+    decimal_fields = {
+        "ending_equity_usd",
+        "maximum_drawdown",
+        "probabilistic_sharpe_ratio",
+        "sharpe_ratio",
+        "sortino_ratio",
+        "starting_equity_usd",
+        "total_fees_usd",
+    }
+    for field in sorted(decimal_fields):
         normalized_reported[field] = _canonical_decimal_string(
             reported[field], f"metrics.directly_reported.{field}"
         )
@@ -824,10 +874,54 @@ def _normalize_output_metrics(value: object, *, order_validation_source: str) ->
     if isinstance(order_count, bool) or not isinstance(order_count, int) or order_count < 0:
         raise WalkForwardResultError("reported order count must be a non-negative integer")
     normalized_reported["order_count"] = order_count
+
+    fee_validation_source = reported["fee_validation_source"]
+    if (
+        not isinstance(fee_validation_source, str)
+        or fee_validation_source not in _FEE_VALIDATION_SOURCES
+    ):
+        raise WalkForwardResultError("normalized fee validation source is unsupported")
+    fee_precision = reported["fee_precision"]
+    if not isinstance(fee_precision, str) or fee_precision not in _FEE_PRECISIONS:
+        raise WalkForwardResultError("normalized fee precision is unsupported")
+    event_fee_evidence = reported["order_event_fee_evidence_available"]
+    if not isinstance(event_fee_evidence, bool):
+        raise WalkForwardResultError(
+            "normalized order-event fee evidence availability must be boolean"
+        )
+
+    expected_fee_evidence: dict[str, object]
+    if order_validation_source == "order_events":
+        expected_fee_evidence = {
+            "fee_precision": "order_event_amount_precision",
+            "fee_validation_source": "order_events",
+            "order_event_fee_evidence_available": True,
+        }
+    else:
+        expected_fee_evidence = {
+            "fee_precision": "rounded_to_cent",
+            "fee_validation_source": "overview_runtime_rounded",
+            "order_event_fee_evidence_available": False,
+        }
+    if {
+        "fee_precision": fee_precision,
+        "fee_validation_source": fee_validation_source,
+        "order_event_fee_evidence_available": event_fee_evidence,
+    } != expected_fee_evidence:
+        raise WalkForwardResultError(
+            "normalized fee evidence metadata disagrees with order evidence"
+        )
+    normalized_reported.update(expected_fee_evidence)
+
     if normalized_reported["starting_equity_usd"] != "100000":
         raise WalkForwardResultError("normalized result starting equity differs from v1")
     if Decimal(str(normalized_reported["ending_equity_usd"])) <= 0:
         raise WalkForwardResultError("normalized result ending equity must be positive")
+    normalized_total_fees = Decimal(str(normalized_reported["total_fees_usd"]))
+    if normalized_total_fees < 0:
+        raise WalkForwardResultError("normalized result total fees must be non-negative")
+    if fee_precision == "rounded_to_cent":
+        _require_cent_precision(normalized_total_fees, "normalized result total fees")
     drawdown = Decimal(str(normalized_reported["maximum_drawdown"]))
     probabilistic = Decimal(str(normalized_reported["probabilistic_sharpe_ratio"]))
     if not Decimal("0") <= drawdown <= Decimal("1"):
@@ -1249,10 +1343,22 @@ def _dashboard_decimal(value: object, path: str, *, percent: bool = False) -> De
     observed_percent = selected.endswith("%")
     if observed_percent:
         selected = selected[:-1]
+    if observed_percent and not percent:
+        raise WalkForwardResultError(f"{path} must not use percent units")
     parsed = _decimal(selected, path)
-    if percent or observed_percent:
+    if percent:
         parsed /= Decimal("100")
     return parsed
+
+
+def _require_cent_precision(value: Decimal, path: str) -> None:
+    decimal_tuple = value.as_tuple()
+    exponent = decimal_tuple.exponent
+    if not isinstance(exponent, int):
+        raise WalkForwardResultError(f"{path} must be a finite cent-precision value")
+    digits_beyond_cents = max(0, -exponent - 2)
+    if digits_beyond_cents and any(decimal_tuple.digits[-digits_beyond_cents:]):
+        raise WalkForwardResultError(f"{path} must be rounded to cent precision")
 
 
 def _require_dashboard_close(
@@ -1280,6 +1386,30 @@ def _reported_metric(observation: Mapping[str, Any], field: str) -> Decimal:
 
 def _derived_metric(observation: Mapping[str, Any], field: str) -> Decimal:
     return Decimal(str(observation["metrics"]["derived"][field]))
+
+
+def _exact_decimal_sum(values: Sequence[Decimal]) -> Decimal:
+    if not values:
+        return Decimal("0")
+    exponents = [value.as_tuple().exponent for value in values]
+    if any(not isinstance(exponent, int) for exponent in exponents):
+        raise WalkForwardResultError("fee values must be finite decimals")
+    common_exponent = min(exponents)
+    total_coefficient = 0
+    for value in values:
+        sign, digits, exponent = value.as_tuple()
+        coefficient = int("".join(str(digit) for digit in digits))
+        if sign:
+            coefficient = -coefficient
+        total_coefficient += coefficient * 10 ** (int(exponent) - common_exponent)
+    sign = int(total_coefficient < 0)
+    absolute = str(abs(total_coefficient))
+    return Decimal((sign, tuple(int(digit) for digit in absolute), common_exponent))
+
+
+def _decimal_difference_exceeds(left: Decimal, right: Decimal, tolerance: Decimal) -> bool:
+    difference = _exact_decimal_sum((left, right.copy_negate())).copy_abs()
+    return difference > tolerance
 
 
 def _median(values: Sequence[Decimal]) -> Decimal:

@@ -38,8 +38,9 @@ fixed-parameter rolling evaluation to five calendar-year SPY folds that were
 declared before any fold result was observed. The workflow is not optimization:
 all folds retain the same strategy, risk, cost, account, data, and execution
 settings. Its implementation and offline validation include separate canonical-log
-and QuantConnect Download Results import paths. One valid private 2021 result
-exists outside the repository and must not be rerun; it is not tracked evidence.
+and QuantConnect Download Results import paths. Valid private 2021 and 2022
+results exist outside the repository and must not be rerun; they are not
+tracked evidence.
 
 The pre-existing `lean/` tree remains preserved. See
 `docs/lean-integration.md` and ADR 0007.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -138,7 +139,10 @@ def test_valid_2021_result_is_strictly_sanitized_and_content_bound(
     )
     assert normalized["metrics"]["directly_reported"] == {
         "ending_equity_usd": "110000",
+        "fee_precision": "rounded_to_cent",
+        "fee_validation_source": "overview_runtime_rounded",
         "maximum_drawdown": "0.05",
+        "order_event_fee_evidence_available": False,
         "order_count": 2,
         "probabilistic_sharpe_ratio": "0.75",
         "sharpe_ratio": "1.2",
@@ -196,6 +200,11 @@ def test_order_event_variant_preserves_event_level_validation(
     )
 
     assert normalized["orders"]["order_validation_source"] == "order_events"
+    assert normalized["metrics"]["directly_reported"]["fee_validation_source"] == ("order_events")
+    assert normalized["metrics"]["directly_reported"]["fee_precision"] == (
+        "order_event_amount_precision"
+    )
+    assert normalized["metrics"]["directly_reported"]["order_event_fee_evidence_available"] is True
     assert normalized["metrics"]["unavailable"] == [
         "algorithm_risk_halt_state",
         "engine_version",
@@ -450,18 +459,17 @@ def test_completed_orders_reject_short_intermediate_position(
 
 
 @pytest.mark.parametrize(
-    "field, value, message",
+    "field, value",
     [
-        ("statistics", "$3.00", "statistics.Total Fees"),
-        ("runtimeStatistics", "-$3.00", "runtime fees"),
+        ("statistics", "$3.00"),
+        ("runtimeStatistics", "-$3.00"),
     ],
 )
-def test_completed_orders_reconcile_authoritative_aggregate_fees(
+def test_missing_order_events_require_matching_overview_and_runtime_fees(
     tmp_path: Path,
     protocol_bundle: ProtocolBundle,
     field: str,
     value: str,
-    message: str,
 ) -> None:
     payload = _download_result()
     if field == "statistics":
@@ -469,11 +477,291 @@ def test_completed_orders_reconcile_authoritative_aggregate_fees(
     else:
         payload[field]["Fees"] = value
 
-    with pytest.raises(WalkForwardResultError, match=message):
+    with pytest.raises(
+        WalkForwardResultError,
+        match="statistics.Total Fees and runtimeStatistics.Fees disagree",
+    ):
         parse_result_json(
             _write_result(tmp_path / f"wrong-{field}-fees.json", payload),
             bundle=protocol_bundle,
         )
+
+
+def test_sanitized_real_2021_fee_shape_uses_rounded_whole_backtest_fee(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _fold_result(0)
+    payload.pop("orderEvents")
+    payload["totalPerformance"]["tradeStatistics"]["totalFees"] = "18.0048"
+    payload["statistics"]["Total Fees"] = "$18.00"
+    payload["runtimeStatistics"]["Fees"] = "-$18.00"
+
+    normalized = parse_result_json(
+        _write_result(tmp_path / "sanitized-2021-fee-shape.json", payload),
+        bundle=protocol_bundle,
+    )
+
+    reported = normalized["metrics"]["directly_reported"]
+    assert reported["total_fees_usd"] == "18"
+    assert reported["fee_validation_source"] == "overview_runtime_rounded"
+    assert reported["fee_precision"] == "rounded_to_cent"
+    assert reported["order_event_fee_evidence_available"] is False
+    assert normalized["orders"]["final_position_state"] == "long"
+    assert "18.0048" not in deterministic_json(normalized)
+
+
+def test_sanitized_real_2022_fee_mismatch_discards_trade_analysis_fee(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _fold_result(1)
+    payload.pop("orderEvents")
+    payload["totalPerformance"]["tradeStatistics"]["totalFees"] = "18"
+    payload["statistics"]["Total Fees"] = "$20.00"
+    payload["runtimeStatistics"]["Fees"] = "-$20.00"
+
+    normalized = parse_result_json(
+        _write_result(tmp_path / "sanitized-2022-fee-shape.json", payload),
+        bundle=protocol_bundle,
+    )
+
+    reported = normalized["metrics"]["directly_reported"]
+    assert reported["total_fees_usd"] == "20"
+    assert reported["fee_validation_source"] == "overview_runtime_rounded"
+    assert reported["fee_precision"] == "rounded_to_cent"
+    assert reported["order_event_fee_evidence_available"] is False
+    assert normalized["orders"]["final_position_state"] == "long"
+    assert set(reported) == {
+        "ending_equity_usd",
+        "fee_precision",
+        "fee_validation_source",
+        "maximum_drawdown",
+        "order_count",
+        "order_event_fee_evidence_available",
+        "probabilistic_sharpe_ratio",
+        "sharpe_ratio",
+        "sortino_ratio",
+        "starting_equity_usd",
+        "total_fees_usd",
+    }
+
+
+def test_missing_order_events_accept_cent_tolerance_and_use_overview_value(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _download_result()
+    payload["totalPerformance"]["tradeStatistics"]["totalFees"] = "987.654"
+    payload["statistics"]["Total Fees"] = "$2.00"
+    payload["runtimeStatistics"]["Fees"] = "-$2.01"
+
+    normalized = parse_result_json(
+        _write_result(tmp_path / "rounded-fees.json", payload),
+        bundle=protocol_bundle,
+    )
+
+    reported = normalized["metrics"]["directly_reported"]
+    assert reported["total_fees_usd"] == "2"
+    assert reported["fee_validation_source"] == "overview_runtime_rounded"
+    assert reported["fee_precision"] == "rounded_to_cent"
+    assert reported["order_event_fee_evidence_available"] is False
+    assert "987.654" not in deterministic_json(normalized)
+
+
+def test_missing_order_events_reject_overview_runtime_difference_above_one_cent(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _download_result()
+    payload["totalPerformance"]["tradeStatistics"]["totalFees"] = "2.02"
+    payload["statistics"]["Total Fees"] = "$2.00"
+    payload["runtimeStatistics"]["Fees"] = "-$2.02"
+
+    with pytest.raises(
+        WalkForwardResultError,
+        match="statistics.Total Fees and runtimeStatistics.Fees disagree",
+    ):
+        parse_result_json(
+            _write_result(tmp_path / "contradictory-rounded-fees.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value"),
+    [
+        ("statistics", "Total Fees", "$2.001"),
+        ("runtimeStatistics", "Fees", "-$2.001"),
+    ],
+)
+def test_rounded_fee_displays_must_be_cent_aligned(
+    tmp_path: Path,
+    protocol_bundle: ProtocolBundle,
+    section: str,
+    field: str,
+    value: str,
+) -> None:
+    payload = _download_result()
+    payload[section][field] = value
+
+    with pytest.raises(WalkForwardResultError, match="rounded to cent precision"):
+        parse_result_json(
+            _write_result(tmp_path / f"fractional-cent-{section}.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+def test_runtime_fee_magnitude_preserves_fractional_cent_digits(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _download_result()
+    payload["runtimeStatistics"]["Fees"] = "-$2." + "0" * 28 + "1"
+
+    with pytest.raises(WalkForwardResultError, match="rounded to cent precision"):
+        parse_result_json(
+            _write_result(tmp_path / "high-precision-runtime-fee.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+def test_order_events_are_authoritative_at_event_amount_precision(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _result()
+    payload["totalPerformance"]["tradeStatistics"]["totalFees"] = "123.456"
+    payload["statistics"]["Total Fees"] = "$2.00"
+    payload["runtimeStatistics"]["Fees"] = "-$2.00"
+    for event in payload["orderEvents"]:
+        event["orderFee"]["value"]["amount"] = "1.0024"
+
+    normalized = parse_result_json(
+        _write_result(tmp_path / "event-authoritative-fees.json", payload),
+        bundle=protocol_bundle,
+    )
+
+    reported = normalized["metrics"]["directly_reported"]
+    assert reported["total_fees_usd"] == "2.0048"
+    assert reported["fee_validation_source"] == "order_events"
+    assert reported["fee_precision"] == "order_event_amount_precision"
+    assert reported["order_event_fee_evidence_available"] is True
+    assert "123.456" not in deterministic_json(normalized)
+
+
+def test_order_event_fee_sum_preserves_all_bounded_decimal_digits(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _result()
+    for event in payload["orderEvents"]:
+        event["orderFee"]["value"]["amount"] = "1.00000000000000000000000000001"
+
+    normalized = parse_result_json(
+        _write_result(tmp_path / "exact-event-fee-sum.json", payload),
+        bundle=protocol_bundle,
+    )
+
+    assert normalized["metrics"]["directly_reported"]["total_fees_usd"] == (
+        "2.00000000000000000000000000002"
+    )
+
+
+def test_nonzero_order_event_fee_requires_explicit_usd_currency(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _result()
+    payload["orderEvents"][0]["orderFee"]["value"]["currency"] = ""
+
+    with pytest.raises(WalkForwardResultError, match="non-negative USD"):
+        parse_result_json(
+            _write_result(tmp_path / "missing-event-fee-currency.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value"),
+    [
+        ("statistics", "Total Fees", "$200%"),
+        ("runtimeStatistics", "Fees", "-$200%"),
+    ],
+)
+def test_fee_displays_reject_percent_units(
+    tmp_path: Path,
+    protocol_bundle: ProtocolBundle,
+    section: str,
+    field: str,
+    value: str,
+) -> None:
+    payload = _download_result()
+    payload[section][field] = value
+
+    with pytest.raises(WalkForwardResultError, match="percent units"):
+        parse_result_json(
+            _write_result(tmp_path / f"percent-fee-{section}.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value"),
+    [
+        ("statistics", "Total Fees", "$2.02"),
+        ("runtimeStatistics", "Fees", "-$2.02"),
+    ],
+)
+def test_order_event_fee_sum_rejects_contradictory_rounded_displays(
+    tmp_path: Path,
+    protocol_bundle: ProtocolBundle,
+    section: str,
+    field: str,
+    value: str,
+) -> None:
+    payload = _result()
+    payload[section][field] = value
+
+    with pytest.raises(WalkForwardResultError, match="authoritative order-event fees"):
+        parse_result_json(
+            _write_result(tmp_path / f"wrong-event-{section}-fees.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+def test_order_event_fee_reconciliation_enforces_exact_one_cent_boundary(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    payload = _result()
+    payload["orderEvents"][0]["orderFee"]["value"]["amount"] = "2.01" + "0" * 80 + "1"
+    payload["orderEvents"][1]["orderFee"]["value"]["amount"] = "0"
+
+    with pytest.raises(WalkForwardResultError, match="authoritative order-event fees"):
+        parse_result_json(
+            _write_result(tmp_path / "above-one-cent-event-difference.json", payload),
+            bundle=protocol_bundle,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("fee_validation_source", "trade_statistics"),
+        ("fee_precision", "rounded_to_dollar"),
+        ("order_event_fee_evidence_available", True),
+    ],
+)
+def test_normalized_fee_evidence_contract_is_fail_closed(
+    protocol_bundle: ProtocolBundle, field: str, value: object
+) -> None:
+    normalized = parse_result_json(FIXTURE, bundle=protocol_bundle)
+    normalized["metrics"]["directly_reported"][field] = value
+
+    with pytest.raises(WalkForwardResultError, match="fee"):
+        normalize_result_observation(normalized, bundle=protocol_bundle)
+
+
+def test_normalized_rounded_fee_precision_rejects_fractional_cent_total(
+    protocol_bundle: ProtocolBundle,
+) -> None:
+    normalized = parse_result_json(FIXTURE, bundle=protocol_bundle)
+    normalized["metrics"]["directly_reported"]["total_fees_usd"] = "2.001"
+
+    with pytest.raises(WalkForwardResultError, match="rounded to cent precision"):
+        normalize_result_observation(normalized, bundle=protocol_bundle)
 
 
 def test_cli_exposes_only_specific_safe_result_validation_message(
@@ -610,6 +898,57 @@ def test_exact_five_result_aggregation_is_deterministic_and_rejects_duplicates(
         aggregate_result_observations(duplicate, bundle=protocol_bundle)
 
 
+def test_exact_five_aggregation_uses_normalized_whole_backtest_fees(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    overview_fees = ("18.00", "20.00", "3.33", "4.44", "5.55")
+    trade_analysis_fees = ("18.0048", "18", "33.3333", "44.4444", "55.5555")
+    normalized_fees = ("18", "20", "3.33", "4.44", "5.55")
+    observations: list[dict[str, Any]] = []
+
+    for index, (overview, trade_analysis, expected) in enumerate(
+        zip(overview_fees, trade_analysis_fees, normalized_fees, strict=True)
+    ):
+        payload = _fold_result(index)
+        payload.pop("orderEvents")
+        payload["totalPerformance"]["tradeStatistics"]["totalFees"] = trade_analysis
+        payload["statistics"]["Total Fees"] = f"${overview}"
+        payload["runtimeStatistics"]["Fees"] = f"-${overview}"
+        normalized = parse_result_json(
+            _write_result(tmp_path / f"rounded-{FOLD_IDS[index]}.json", payload),
+            bundle=protocol_bundle,
+        )
+        assert normalized["metrics"]["directly_reported"]["total_fees_usd"] == expected
+        observations.append(normalized)
+
+    forward = aggregate_result_observations(observations, bundle=protocol_bundle)
+    reverse = aggregate_result_observations(list(reversed(observations)), bundle=protocol_bundle)
+
+    assert deterministic_json(forward) == deterministic_json(reverse)
+    assert forward["summary"]["total_fees_usd"] == "51.32"
+    assert [
+        fold["metrics"]["directly_reported"]["total_fees_usd"] for fold in forward["fold_results"]
+    ] == list(normalized_fees)
+    assert {
+        fold["metrics"]["directly_reported"]["fee_validation_source"]
+        for fold in forward["fold_results"]
+    } == {"overview_runtime_rounded"}
+
+
+def test_exact_five_aggregation_preserves_event_amount_precision(
+    tmp_path: Path, protocol_bundle: ProtocolBundle
+) -> None:
+    observations = _normalized_five(tmp_path, protocol_bundle)
+    for observation in observations:
+        observation["metrics"]["directly_reported"]["total_fees_usd"] = (
+            "1.00000000000000000000000000001"
+        )
+
+    aggregate = aggregate_result_observations(observations, bundle=protocol_bundle)
+
+    assert aggregate["summary"]["total_fees_usd"] == ("5.00000000000000000000000000005")
+
+
 def test_result_aggregation_rejects_mixed_source_types(
     tmp_path: Path, protocol_bundle: ProtocolBundle
 ) -> None:
@@ -661,6 +1000,20 @@ def test_result_schemas_are_closed_canonical_and_validate_normalized_records(
     )
     assert observation_schema["additionalProperties"] is False
     assert aggregate_schema["additionalProperties"] is False
+    cent_precision = observation_schema["$defs"]["centPrecisionNonNegativeDecimal"]
+    cent_pattern = cent_precision["allOf"][1]["pattern"]
+    assert re.fullmatch(cent_pattern, "2.01")
+    assert not re.fullmatch(cent_pattern, "2.001")
+    completed_orders_rule = next(
+        rule
+        for rule in observation_schema["allOf"]
+        if rule["if"]["properties"]["orders"]["properties"]["order_validation_source"]["const"]
+        == "completed_orders"
+    )
+    rounded_fee_constraint = completed_orders_rule["then"]["properties"]["metrics"]["properties"][
+        "directly_reported"
+    ]["properties"]["total_fees_usd"]
+    assert rounded_fee_constraint == {"$ref": "#/$defs/centPrecisionNonNegativeDecimal"}
     assert normalize_result_observation(observation, bundle=protocol_bundle) == observation
     assert normalize_result_aggregate(aggregate, bundle=protocol_bundle) == aggregate
 

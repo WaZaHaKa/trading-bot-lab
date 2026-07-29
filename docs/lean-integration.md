@@ -47,7 +47,7 @@ never be copied into this repository. The current `lean-workspace/lean.json` is
 operator-local, Git-ignored, and must never be force-added. Ignoring it preserves
 the locally working linkage in place; it does not delete or rewrite the file. The
 tracked project configurations may
-contain only `algorithm-language`, `parameters`, and a public semicolon-free
+contain only `algorithm-language`, `parameters`, and a public comma- and semicolon-free
 `description`; `organization-id`, `cloud-id`, and `local-id` are private local
 linkage metadata even though they are not access tokens.
 

@@ -215,6 +215,7 @@ SENSITIVE_LEAN_KEYS = {
 }
 
 LEAN_METADATA_KEYS = {"organization-id", "cloud-id", "local-id"}
+LEAN_CLOUD_DESCRIPTION_FORBIDDEN_CHARACTERS = (",", ";")
 
 LEAN_GENERATED_PARTS = {
     ".lean",
@@ -474,6 +475,30 @@ def _normalized_json_keys(value: Any) -> set[str]:
     return keys
 
 
+def _lean_cloud_description_findings(relative: str, payload: Any) -> list[str]:
+    git_path = PurePosixPath(relative)
+    if (
+        not isinstance(payload, dict)
+        or git_path.parts[:2] != ("lean-workspace", "Strategies")
+        or git_path.name != "config.json"
+    ):
+        return []
+
+    description = payload.get("description")
+    if not isinstance(description, str):
+        return []
+
+    findings: list[str] = []
+    for character in LEAN_CLOUD_DESCRIPTION_FORBIDDEN_CHARACTERS:
+        position = description.find(character)
+        if position >= 0:
+            findings.append(
+                f"{relative} description violates the LEAN cloud push contract: "
+                f"Invalid character {character!r} found in input string at position {position}."
+            )
+    return findings
+
+
 def _lean_workspace_findings(root: Path, candidates: list[str]) -> list[str]:
     findings: list[str] = []
     if (root / ".lean").exists():
@@ -531,6 +556,7 @@ def _lean_workspace_findings(root: Path, candidates: list[str]) -> list[str]:
             else:
                 for key in _walk_sensitive_json(payload):
                     findings.append(f"{relative} contains non-empty sensitive key: {key}")
+                findings.extend(_lean_cloud_description_findings(relative, payload))
         if PRIVATE_KEY_HEADER.search(text):
             findings.append(f"{relative} contains a private-key header")
         if any(pattern.search(text) for pattern in TOKEN_SIGNATURES):
@@ -555,6 +581,7 @@ def _tracked_lean_metadata_findings(root: Path, tracked: list[str]) -> list[str]
         except json.JSONDecodeError:
             findings.append(f"{normalized} staged content is invalid JSON")
             continue
+        findings.extend(_lean_cloud_description_findings(normalized, payload))
         for key in _walk_sensitive_json(payload):
             findings.append(f"{normalized} staged content contains non-empty sensitive key: {key}")
         forbidden = sorted(LEAN_METADATA_KEYS.intersection(_normalized_json_keys(payload)))

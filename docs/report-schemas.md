@@ -174,9 +174,17 @@ Results JSON cannot support them. The importer never fabricates them.
 
 The importer prefers precise `totalPerformance` values and uses dashboard text
 only for consistency checks. Tolerances are `0.0005` for rounded ratios and USD
-`0.01` for rounded currency displays. It validates SPY-only orders/events,
-finite values, fees, chronological fills, a non-short final position, available
-runtime position state, and an unambiguous Benchmark chart covering the fold.
+`0.01` for rounded currency displays. It accepts only the two official Benchmark
+point encodings and requires fold coverage. A populated bounded UTC
+`outOfSampleMaxEndDate` remains unreported metadata when out-of-sample days are
+zero.
+
+`orders.order_validation_source` is `order_events` when event-level fills and
+fees were reconciled. It is `completed_orders` when the official download omitted
+`orderEvents`; that path requires filled SPY orders, valid `lastFillTime`, exact
+state/statistics order counts, aggregate fee consistency, and a chronologically
+non-short position. In the latter case `order_event_detail` is appended to the
+unavailable evidence list. Individual events or fees are never fabricated.
 
 `result-aggregate-record.schema.json` requires all five unique fixed folds and
 one source format. Its summaries are descriptive only. A valid private 2021

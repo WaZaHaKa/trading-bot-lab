@@ -2,10 +2,10 @@
   "algorithmConfiguration": {
     "accountCurrency": "USD",
     "accountType": "Cash",
-    "endDate": "2021-12-31T00:00:00Z",
+    "endDate": "2021-12-31T23:59:59.999999Z",
     "name": "wf-v1-spy-2021",
     "outOfSampleDays": 0,
-    "outOfSampleMaxEndDate": null,
+    "outOfSampleMaxEndDate": "2021-12-31T00:00:00Z",
     "parameters": {
       "fold-id": "spy-2021",
       "optimization-mode": "false"
@@ -19,58 +19,23 @@
         "Benchmark": {
           "name": "Benchmark",
           "values": [
-            {
-              "x": 1609718400,
-              "y": 100
-            },
-            {
-              "x": 1640908800,
-              "y": 110
-            }
+            [
+              1609718400,
+              100
+            ],
+            [
+              1640908800,
+              110
+            ]
           ]
         }
       }
     }
   },
-  "orderEvents": [
-    {
-      "fillPrice": 100,
-      "fillPriceCurrency": "USD",
-      "fillQuantity": 10,
-      "orderFee": {
-        "value": {
-          "amount": 1,
-          "currency": "USD"
-        }
-      },
-      "orderId": 1,
-      "status": 3,
-      "symbol": {
-        "value": "SPY"
-      },
-      "utcTime": "2021-03-01T14:30:00Z"
-    },
-    {
-      "fillPrice": 110,
-      "fillPriceCurrency": "USD",
-      "fillQuantity": -5,
-      "orderFee": {
-        "value": {
-          "amount": 1,
-          "currency": "USD"
-        }
-      },
-      "orderId": 2,
-      "status": 3,
-      "symbol": {
-        "value": "SPY"
-      },
-      "utcTime": "2021-10-01T13:30:00Z"
-    }
-  ],
   "orders": {
     "1": {
       "id": 1,
+      "lastFillTime": "2021-03-01T14:30:00Z",
       "price": 100,
       "priceCurrency": "USD",
       "quantity": 10,
@@ -83,6 +48,7 @@
     },
     "2": {
       "id": 2,
+      "lastFillTime": "2021-10-01T13:30:00Z",
       "price": 110,
       "priceCurrency": "USD",
       "quantity": -5,
@@ -102,6 +68,7 @@
   },
   "state": {
     "Name": "wf-v1-spy-2021",
+    "OrderCount": 2,
     "RuntimeError": "",
     "StackTrace": "",
     "Status": "Completed"

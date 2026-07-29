@@ -361,10 +361,18 @@ After any authorized run, raw logs/results remain ignored. Canonical-log
 extraction requires exactly one bounded canonical observation, rejects
 identity-bearing content and provenance/schema drift, and binds source and
 public configuration. Download Results extraction validates official state,
-configuration, precise performance, SPY orders/events, final position, and the
-Benchmark chart, then emits only sanitized content-bound fields. It never copies
-private IDs, URLs, hostnames, account metadata, credentials, paths, or raw order
-IDs.
+configuration, precise performance, SPY orders, final position, and the Benchmark
+chart, then emits only sanitized content-bound fields. Configuration timestamps
+may identify any UTC instant on the fixed start/end calendar date. It accepts the official
+array or `x`/`y` Benchmark point encodings and permits bounded UTC
+`outOfSampleMaxEndDate` metadata only when out-of-sample days remain zero. Results
+with `orderEvents` retain event-level reconciliation; official downloads without
+them require filled orders, `lastFillTime`, state/statistics count agreement,
+non-short chronological position derivation, and aggregate fee reconciliation.
+The normalized `order_validation_source` distinguishes those paths and records
+missing event detail as unavailable. Safe CLI failures include only the fixed
+validation reason. The importer never copies private IDs, URLs, hostnames,
+account metadata, credentials, paths, or raw order IDs.
 A completed observation additionally proves the final eligible exchange close
 was processed, so partial or trailing-data-outage runs fail closed. Aggregation
 requires all five folds, presents each fold before descriptive summaries, and

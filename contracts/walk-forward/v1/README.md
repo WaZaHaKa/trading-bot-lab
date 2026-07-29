@@ -25,13 +25,23 @@ it has a separate closed contract in `result-observation.schema.json` and
 `source_format=quantconnect_result_json`; an aggregate requires that same source
 format for all five folds and cannot mix it with `canonical_algorithm_log`.
 
-Result import validates completed state, exact names and parameters, fixed dates,
-cash/USD configuration, no out-of-sample period, official performance fields,
-SPY-only orders and fill events, final-position consistency, and an unambiguous
-Benchmark chart spanning the fold. It uses precise `totalPerformance` fields in
-preference to display strings. Display ratios may differ by at most `0.0005`
-and currency values by at most USD `0.01`, solely to accommodate QuantConnect's
+Result import validates completed state, exact names and parameters, fixed UTC
+calendar dates, cash/USD configuration, zero out-of-sample days, official performance fields,
+SPY-only orders, final-position consistency, and an unambiguous Benchmark chart
+spanning the fold. A populated bounded UTC `outOfSampleMaxEndDate` is metadata,
+not evidence of an out-of-sample period when `outOfSampleDays` is zero. Benchmark
+points may use either official `[unix_seconds, value]` arrays or exact `x`/`y`
+objects and normalize identically. It uses precise `totalPerformance` fields in
+preference to display strings. Display ratios may differ by at most `0.0005` and
+currency values by at most USD `0.01`, solely to accommodate QuantConnect's
 published rounding. Total return is recomputed from start/end equity.
+
+When `orderEvents` exists, fills and per-event fees are reconciled. When the
+official download omits it, every order must be filled and the importer derives
+the non-short position from `lastFillTime` and order ID, reconciles both official
+order counts, and treats precise aggregate fees as authoritative. Normalized
+records state `order_validation_source`; missing event detail is explicitly
+unavailable and never fabricated.
 
 ## Identities and canonical JSON
 

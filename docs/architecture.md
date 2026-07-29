@@ -150,19 +150,23 @@ flowchart LR
     F --> A["Deterministic descriptive aggregate"]
 ```
 
-The repository currently reaches the print-only boundary, not `R`: zero
-walk-forward cloud backtests or results exist. No operator phase executes LEAN
-or network work. `extract` and `aggregate` are offline local artifact phases.
+One valid private `wf-v1-spy-2021` Download Results JSON exists outside the
+repository and must not be rerun. This importer change performs no cloud work.
+No operator phase executes LEAN or network work. `extract`/`aggregate` preserve
+the canonical-log path; `extract-result`/`aggregate-result` are separate offline
+phases for official Download Results JSON.
 
 `walk_forward/contract.py` validates the canonical manifest, exact five folds,
 schema/source/configuration hashes, and fixed settings.
 `walk_forward/observation.py` parses one size-bounded canonical observation,
 caps total artifact reads, rejects non-regular/link-bearing paths, screens
 identity-bearing values, normalizes atomically, and derives an exact-five
-aggregate. Operator writes stay inside the ignored walk-forward report root and
-cannot replace an aggregate input. `walk_forward/operator.py` exposes `plan`, `validate`,
-`print-cloud-commands`, `extract`, `aggregate`, and `evidence`; the default plan
-is read-only and no cloud-run phase exists.
+aggregate. `walk_forward/result_json.py` independently validates and sanitizes
+QuantConnect Download Results JSON, reconciles orders/fills/fees/final position,
+and derives benchmark values only from an unambiguous official chart. Operator
+writes stay inside the ignored walk-forward report root and cannot replace an
+aggregate input. The operator exposes explicit canonical and result-JSON phases;
+the default plan is read-only and no cloud-run phase exists.
 
 The LEAN project maps only predeclared fold IDs. It uses adjusted daily SPY,
 precise market-close daily timestamps, 50 pre-start warmup bars without

@@ -62,11 +62,15 @@
   authoritative for loading, serialization, and writes.
 - The Moving Average ending-equity observation is not a profitability,
   robustness, or strategy-quality claim.
-- No optimization, walk-forward result, Monte Carlo result, profitability
-  claim, broker paper deployment, or live deployment exists in this sprint.
-- Fixed walk-forward v1 is implementation-only: no fold command has run, no
-  observation or aggregate result exists, and engine/data availability remains
+- No optimization, Monte Carlo result, profitability claim, broker paper
+  deployment, or live deployment exists in this sprint.
+- One valid private `wf-v1-spy-2021` Download Results JSON exists outside the
+  repository and must not be rerun. It is not tracked evidence. The other four
+  folds, a normalized exact-five aggregate, and engine/data availability remain
   external operator state.
+- Download Results JSON cannot prove engine version, algorithm risk-halt state,
+  estimated slippage, or rejected-order count. Those fields remain explicitly
+  unavailable; only the canonical algorithm-log format can support them.
 - Its five predeclared calendar-year folds evaluate only adjusted daily SPY.
   They do not establish statistical independence, market breadth, or an edge.
 - Warmup may read preceding completed bars, but orders, trades, and evaluation

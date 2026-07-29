@@ -1,0 +1,151 @@
+{
+  "$defs": {
+    "canonicalDecimal": {
+      "pattern": "^(?:0|-?(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:trading-bot-lab:walk-forward:v1:result-aggregate-record",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "contract_status": {
+      "const": "walk_forward_result_contract_complete"
+    },
+    "fold_results": {
+      "items": {
+        "$ref": "result-observation.schema.json"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "type": "array"
+    },
+    "identities": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregate_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "observation_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "project_source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "protocol_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "public_configuration_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "aggregate_schema_sha256",
+        "observation_schema_sha256",
+        "project_source_sha256",
+        "protocol_manifest_sha256",
+        "public_configuration_sha256"
+      ],
+      "type": "object"
+    },
+    "protocol_name": {
+      "const": "fixed_parameter_rolling_walk_forward"
+    },
+    "protocol_version": {
+      "const": "1.0.0"
+    },
+    "record_type": {
+      "const": "walk_forward_result_aggregate"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "source_formats": {
+      "const": [
+        "quantconnect_result_json"
+      ],
+      "type": "array"
+    },
+    "summary": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark_beating_fold_count": {
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "completed_fold_count": {
+          "const": 5
+        },
+        "median_benchmark_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "median_excess_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "median_probabilistic_sharpe_ratio": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "median_sharpe_ratio": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "median_sortino_ratio": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "median_strategy_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "positive_return_fold_count": {
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total_fees_usd": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "total_orders": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "worst_fold_return": {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        "worst_maximum_drawdown": {
+          "$ref": "#/$defs/canonicalDecimal"
+        }
+      },
+      "required": [
+        "benchmark_beating_fold_count",
+        "completed_fold_count",
+        "median_benchmark_return",
+        "median_excess_return",
+        "median_probabilistic_sharpe_ratio",
+        "median_sharpe_ratio",
+        "median_sortino_ratio",
+        "median_strategy_return",
+        "positive_return_fold_count",
+        "total_fees_usd",
+        "total_orders",
+        "worst_fold_return",
+        "worst_maximum_drawdown"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "contract_status",
+    "fold_results",
+    "identities",
+    "protocol_name",
+    "protocol_version",
+    "record_type",
+    "schema_version",
+    "source_formats",
+    "summary"
+  ],
+  "type": "object"
+}

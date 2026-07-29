@@ -338,25 +338,52 @@ python scripts\run_walk_forward_v1.py validate
 python scripts\run_walk_forward_v1.py print-cloud-commands
 ```
 
-The default `plan`, `validate`, `print-cloud-commands`, and `evidence` phases are
-read-only. `extract` and `aggregate` accept only regular, non-link-bearing local
-inputs and make atomic writes only below ignored `reports/walk-forward/v1`;
-aggregate output cannot alias a fold input. Raw-log, normalized-observation, and
-aggregate reads are capped at 8 MiB, 64 KiB, and 512 KiB. No phase invokes LEAN,
-a network, or a cloud command. The printer emits exactly five named backtests
-for the closed fold set; executing exactly that bounded plan requires separate
-human authorization.
+The default `plan`, `validate`, `print-cloud-commands`, `evidence`, and
+`evidence-result` phases are read-only. `extract`/`aggregate` retain the
+canonical algorithm-log contract. `extract-result`/`aggregate-result` use a
+separate Download Results contract. All writes are atomic and confined below
+ignored `reports/walk-forward/v1`; aggregate output cannot alias an input. Raw
+logs/results and normalized records are bounded regular files and may not
+traverse symlinks or reparse points. No phase invokes LEAN, a network, or a
+cloud command.
 
-After any future authorized run, raw logs/results remain ignored. Extraction
-requires exactly one bounded canonical observation, rejects identity-bearing
-content and provenance/schema drift, and binds source and public configuration.
+This separate importer is necessary with the pinned LEAN CLI `1.0.227` because
+`lean logs --backtest` reads a locally materialized backtest log, while a cloud
+backtest addressed by private project ID does not provide that local canonical
+algorithm log. The operator therefore imports the manually downloaded official
+Results JSON without weakening or replacing the canonical-log contract.
+
+The printer emits exactly five ordered commands using
+`"$LEAN_WALK_FORWARD_PROJECT_ID"`, no `--push`, and exactly two parameters:
+`fold-id=<fixed-fold>` and `optimization-mode=false`. It does not execute them.
+
+After any authorized run, raw logs/results remain ignored. Canonical-log
+extraction requires exactly one bounded canonical observation, rejects
+identity-bearing content and provenance/schema drift, and binds source and
+public configuration. Download Results extraction validates official state,
+configuration, precise performance, SPY orders/events, final position, and the
+Benchmark chart, then emits only sanitized content-bound fields. It never copies
+private IDs, URLs, hostnames, account metadata, credentials, paths, or raw order
+IDs.
 A completed observation additionally proves the final eligible exchange close
 was processed, so partial or trailing-data-outage runs fail closed. Aggregation
 requires all five folds, presents each fold before descriptive summaries, and
 reports runtime consistency separately. Contract completion is not strategy
 approval and no arbitrary performance threshold exists.
 
-Zero walk-forward cloud commands, optimization jobs, data uploads/downloads,
-Object Store actions, broker/exchange actions, paper trades, or live trades have
-occurred. There are no fold results and no profitability, robustness,
-paper-readiness, or live-readiness claim.
+A valid private `wf-v1-spy-2021` Download Results JSON exists outside the
+repository and must not be rerun. Download it manually from the completed
+result's Overview tab, keep the full file private/untracked, and import it with:
+
+```bash
+python scripts/run_walk_forward_v1.py extract-result \
+  --input-result <quantconnect-result.json> \
+  --output reports/walk-forward/v1/spy-2021.json
+python scripts/run_walk_forward_v1.py validate \
+  --result-observation reports/walk-forward/v1/spy-2021.json
+```
+
+This importer change executes zero cloud backtests, optimizations, data
+operations, Object Store actions, broker/exchange actions, paper trades, or live
+trades. No normalized fold or aggregate is tracked, and no profitability,
+robustness, paper-readiness, or live-readiness claim exists.

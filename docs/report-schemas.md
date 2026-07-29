@@ -154,5 +154,31 @@ contract (`walk_forward_contract_complete` or
 `walk_forward_contract_failed`; the schema reserves `incomplete`). Runtime
 drift is reported rather than hidden and does not create a performance gate.
 There is no profitable/robust/paper/live-ready status or arbitrary promotion
-threshold. At this implementation stage no fold observation or aggregate result
-exists.
+threshold.
+
+### QuantConnect Download Results observations
+
+`result-observation.schema.json` is intentionally separate from the canonical
+algorithm-log schema. It binds the protocol content hash, merged project source
+hash, merged public-configuration hash, importer schema version/hash,
+`source_format=quantconnect_result_json`, and a sanitized attestation that the
+selected private cloud source/configuration were verified before execution. The
+attestation contains no private ID, URL, hostname, account, credential, or path.
+
+Directly reported fields are starting/ending equity, maximum drawdown, total
+fees, order count, Sharpe ratio, Sortino ratio, and probabilistic Sharpe ratio.
+Deterministically derived fields are total return, benchmark start/end/return,
+and excess return. Engine version, algorithm risk-halt state, estimated
+slippage, and rejected-order count are explicitly unavailable because Download
+Results JSON cannot support them. The importer never fabricates them.
+
+The importer prefers precise `totalPerformance` values and uses dashboard text
+only for consistency checks. Tolerances are `0.0005` for rounded ratios and USD
+`0.01` for rounded currency displays. It validates SPY-only orders/events,
+finite values, fees, chronological fills, a non-short final position, available
+runtime position state, and an unambiguous Benchmark chart covering the fold.
+
+`result-aggregate-record.schema.json` requires all five unique fixed folds and
+one source format. Its summaries are descriptive only. A valid private 2021
+Download Results file exists outside the repository and must not be rerun; the
+full file and normalized working record remain untracked and ignored.

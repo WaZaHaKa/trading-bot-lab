@@ -1,0 +1,134 @@
+{
+  "algorithmConfiguration": {
+    "accountCurrency": "USD",
+    "accountType": "Cash",
+    "endDate": "2021-12-31T00:00:00Z",
+    "name": "wf-v1-spy-2021",
+    "outOfSampleDays": 0,
+    "outOfSampleMaxEndDate": null,
+    "parameters": {
+      "fold-id": "spy-2021",
+      "optimization-mode": "false"
+    },
+    "startDate": "2021-01-01T00:00:00Z"
+  },
+  "charts": {
+    "Benchmark": {
+      "name": "Benchmark",
+      "series": {
+        "Benchmark": {
+          "name": "Benchmark",
+          "values": [
+            {
+              "x": 1609718400,
+              "y": 100
+            },
+            {
+              "x": 1640908800,
+              "y": 110
+            }
+          ]
+        }
+      }
+    }
+  },
+  "orderEvents": [
+    {
+      "fillPrice": 100,
+      "fillPriceCurrency": "USD",
+      "fillQuantity": 10,
+      "orderFee": {
+        "value": {
+          "amount": 1,
+          "currency": "USD"
+        }
+      },
+      "orderId": 1,
+      "status": 3,
+      "symbol": {
+        "value": "SPY"
+      },
+      "utcTime": "2021-03-01T14:30:00Z"
+    },
+    {
+      "fillPrice": 110,
+      "fillPriceCurrency": "USD",
+      "fillQuantity": -5,
+      "orderFee": {
+        "value": {
+          "amount": 1,
+          "currency": "USD"
+        }
+      },
+      "orderId": 2,
+      "status": 3,
+      "symbol": {
+        "value": "SPY"
+      },
+      "utcTime": "2021-10-01T13:30:00Z"
+    }
+  ],
+  "orders": {
+    "1": {
+      "id": 1,
+      "price": 100,
+      "priceCurrency": "USD",
+      "quantity": 10,
+      "status": 3,
+      "symbol": {
+        "value": "SPY"
+      },
+      "time": "2021-03-01T14:30:00Z",
+      "value": 1000
+    },
+    "2": {
+      "id": 2,
+      "price": 110,
+      "priceCurrency": "USD",
+      "quantity": -5,
+      "status": 3,
+      "symbol": {
+        "value": "SPY"
+      },
+      "time": "2021-10-01T13:30:00Z",
+      "value": -550
+    }
+  },
+  "runtimeStatistics": {
+    "Equity": "$110,000.00",
+    "Fees": "-$2.00",
+    "Holdings": "$550.00",
+    "Return": "10.00%"
+  },
+  "state": {
+    "Name": "wf-v1-spy-2021",
+    "RuntimeError": "",
+    "StackTrace": "",
+    "Status": "Completed"
+  },
+  "statistics": {
+    "Drawdown": "5.00%",
+    "End Equity": "$110,000.00",
+    "Net Profit": "10.00%",
+    "Probabilistic Sharpe Ratio": "75.00%",
+    "Sharpe Ratio": "1.2",
+    "Sortino Ratio": "1.5",
+    "Start Equity": "$100,000.00",
+    "Total Fees": "$2.00",
+    "Total Orders": "2"
+  },
+  "totalPerformance": {
+    "portfolioStatistics": {
+      "drawdown": "0.05",
+      "endEquity": "110000",
+      "probabilisticSharpeRatio": "0.75",
+      "sharpeRatio": "1.2",
+      "sortinoRatio": "1.5",
+      "startEquity": "100000",
+      "totalNetProfit": "0.1"
+    },
+    "tradeStatistics": {
+      "totalFees": "2"
+    }
+  }
+}

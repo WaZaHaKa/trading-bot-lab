@@ -43,10 +43,11 @@ procedure. It does not authorize the new walk-forward plan.
 
 `python scripts/run_walk_forward_v1.py print-cloud-commands` is print-only and
 network-free. It outputs exactly five future backtests named
-`wf-v1-spy-2021` through `wf-v1-spy-2025`, all scoped to
-`Strategies/WalkForwardMovingAverageV1` with one closed `fold-id`. The helper
-has no executable cloud-run phase and is never called by CI or `make check` to
-start work.
+`wf-v1-spy-2021` through `wf-v1-spy-2025`, scoped through the untracked private
+environment placeholder `"$LEAN_WALK_FORWARD_PROJECT_ID"`. Every command omits
+`--push` and contains exactly `fold-id=<fixed-fold>` plus
+`optimization-mode=false`. The helper has no executable cloud-run phase and is
+never called by CI or `make check` to start work.
 
 A later human authorization must cover exactly those five printed commands.
 Before any command, re-run preflight, review the source/configuration hashes and
@@ -61,6 +62,8 @@ reads/writes, arbitrary pushes/projects/dates, optimization, a broker/exchange
 connection, paper trading, or live trading. Raw output must remain ignored;
 only separately reviewed sanitized content-bound evidence may be tracked.
 
-No walk-forward command has been executed and no QCC has been intentionally
-consumed by this workflow. No fold result, profitability conclusion, or
-paper/live approval exists.
+A valid private `wf-v1-spy-2021` result already exists and must not be rerun.
+It remains outside the repository; its full Download Results JSON, IDs, URLs,
+and account metadata are never tracked. The offline importer phase consumes no
+QCC and executes no cloud command. No profitability conclusion or paper/live
+approval exists.

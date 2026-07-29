@@ -255,12 +255,16 @@ def test_lean_workspace_generated_paths_are_ignored(relative: str) -> None:
         "contracts/walk-forward/v1/protocol.schema.json",
         "contracts/walk-forward/v1/observation.schema.json",
         "contracts/walk-forward/v1/aggregate-record.schema.json",
+        "contracts/walk-forward/v1/result-observation.schema.json",
+        "contracts/walk-forward/v1/result-aggregate-record.schema.json",
         "src/trading_bot_lab/walk_forward/__init__.py",
         "src/trading_bot_lab/walk_forward/contract.py",
         "src/trading_bot_lab/walk_forward/observation.py",
         "src/trading_bot_lab/walk_forward/operator.py",
+        "src/trading_bot_lab/walk_forward/result_json.py",
         "scripts/run_walk_forward_v1.py",
         "tests/fixtures/parity/v1/scenario.json",
+        "tests/fixtures/walk-forward/v1/quantconnect-result-spy-2021.json",
     ],
 )
 def test_lean_workspace_source_and_fixture_paths_are_trackable(relative: str) -> None:
@@ -530,6 +534,7 @@ def test_preflight_rejects_tracked_walk_forward_outputs(relative: str, expected:
     [
         "tests/fixtures/parity/v1/synthetic_weekdays.csv",
         "tests/fixtures/parity/v1/scenario.json",
+        "tests/fixtures/walk-forward/v1/quantconnect-result-spy-2021.json",
         "contracts/parity/v1/contract.json",
         "contracts/lean-cloud-validation/v1/2026-07-28.json",
         "contracts/lean-cloud-validation/v1/record.schema.json",
@@ -543,6 +548,8 @@ def test_preflight_rejects_tracked_walk_forward_outputs(relative: str, expected:
         "contracts/walk-forward/v1/protocol.schema.json",
         "contracts/walk-forward/v1/observation.schema.json",
         "contracts/walk-forward/v1/aggregate-record.schema.json",
+        "contracts/walk-forward/v1/result-observation.schema.json",
+        "contracts/walk-forward/v1/result-aggregate-record.schema.json",
         "lean-workspace/Strategies/WalkForwardMovingAverageV1/main.py",
         "lean-workspace/Strategies/WalkForwardMovingAverageV1/config.json",
         "lean-workspace/Strategies/WalkForwardMovingAverageV1/README.md",

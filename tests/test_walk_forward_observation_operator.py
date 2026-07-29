@@ -571,14 +571,17 @@ def test_cloud_command_plan_is_exact_structured_scoped_and_print_only(
             "lean",
             "cloud",
             "backtest",
-            "Strategies/WalkForwardMovingAverageV1",
-            "--push",
+            "$LEAN_WALK_FORWARD_PROJECT_ID",
             "--name",
             f"wf-v1-{fold_id}",
             "--parameter",
             "fold-id",
             fold_id,
+            "--parameter",
+            "optimization-mode",
+            "false",
         )
+        assert "--push" not in command.argv
         assert command.as_dict()["argv"] == list(command.argv)
         lowered = " ".join(command.argv).casefold()
         for forbidden in (

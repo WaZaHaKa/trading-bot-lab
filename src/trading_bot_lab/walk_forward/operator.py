@@ -28,16 +28,38 @@ from trading_bot_lab.walk_forward.observation import (
     parse_observation_log,
     write_aggregate_files,
 )
+from trading_bot_lab.walk_forward.result_json import (
+    WalkForwardResultError,
+    extract_result_json,
+    load_result_aggregate,
+    load_result_observation,
+    parse_result_json,
+    write_result_aggregate_files,
+)
 
 PROJECT_NAME = "Strategies/WalkForwardMovingAverageV1"
+PROJECT_REFERENCE = "$LEAN_WALK_FORWARD_PROJECT_ID"
 REPORT_DIRECTORY = REPOSITORY_ROOT / "reports" / "walk-forward" / "v1"
 DEFAULT_AGGREGATE_PATH = REPORT_DIRECTORY / "aggregate.json"
+DEFAULT_RESULT_AGGREGATE_PATH = REPORT_DIRECTORY / "result-aggregate.json"
 
 _LEAN_COMMAND = "lean"
 _CLOUD_GROUP = "cloud"
 _BACKTEST_ACTION = "backtest"
-_PHASES = ("plan", "validate", "print-cloud-commands", "extract", "aggregate", "evidence")
-_READ_ONLY_PHASES = frozenset({"plan", "validate", "print-cloud-commands", "evidence"})
+_PHASES = (
+    "plan",
+    "validate",
+    "print-cloud-commands",
+    "extract",
+    "extract-result",
+    "aggregate",
+    "aggregate-result",
+    "evidence",
+    "evidence-result",
+)
+_READ_ONLY_PHASES = frozenset(
+    {"plan", "validate", "print-cloud-commands", "evidence", "evidence-result"}
+)
 
 
 class WalkForwardOperatorError(ValueError):
@@ -53,14 +75,20 @@ class CloudBacktestCommand:
     argv: tuple[str, ...]
 
     def render(self) -> str:
-        return shlex.join(self.argv)
+        rendered: list[str] = []
+        for value in self.argv:
+            if value == PROJECT_REFERENCE:
+                rendered.append(f'"{PROJECT_REFERENCE}"')
+            else:
+                rendered.append(shlex.quote(value))
+        return " ".join(rendered)
 
     def as_dict(self) -> dict[str, object]:
         return {
             "argv": list(self.argv),
             "backtest_name": self.backtest_name,
             "fold_id": self.fold_id,
-            "project": PROJECT_NAME,
+            "project": PROJECT_REFERENCE,
         }
 
 
@@ -74,13 +102,15 @@ def build_cloud_command_plan() -> tuple[CloudBacktestCommand, ...]:
             _LEAN_COMMAND,
             _CLOUD_GROUP,
             _BACKTEST_ACTION,
-            PROJECT_NAME,
-            "--push",
+            PROJECT_REFERENCE,
             "--name",
             name,
             "--parameter",
             "fold-id",
             fold_id,
+            "--parameter",
+            "optimization-mode",
+            "false",
         )
         commands.append(CloudBacktestCommand(fold_id=fold_id, backtest_name=name, argv=argv))
     return tuple(commands)
@@ -103,8 +133,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("phase", nargs="?", choices=_PHASES, default="plan")
     parser.add_argument("--input-log", type=Path)
+    parser.add_argument("--input-result", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--observation", type=Path, action="append", default=[])
+    parser.add_argument("--result-observation", type=Path, action="append", default=[])
     parser.add_argument("--aggregate-record", type=Path)
     return parser
 
@@ -138,14 +170,32 @@ def run_phase(args: argparse.Namespace, *, bundle: ProtocolBundle | None = None)
             output = _report_output_path(REPORT_DIRECTORY / f"{observation['fold_id']}.json")
         extract_observation(args.input_log, output, bundle=selected_bundle)
         return "Wrote normalized walk-forward observation.\n"
+    if phase == "extract-result":
+        if args.input_result is None:
+            raise WalkForwardOperatorError("extract-result requires --input-result")
+        output = _report_output_path(args.output) if args.output is not None else None
+        observation = parse_result_json(args.input_result, bundle=selected_bundle)
+        if output is None:
+            output = _report_output_path(REPORT_DIRECTORY / f"{observation['fold_id']}.json")
+        extract_result_json(args.input_result, output, bundle=selected_bundle)
+        return "Wrote normalized QuantConnect result observation.\n"
     if phase == "aggregate":
         output = _report_output_path(args.output or DEFAULT_AGGREGATE_PATH)
         paths = _observation_paths(args.observation)
         write_aggregate_files(paths, output, bundle=selected_bundle)
         return "Wrote walk-forward aggregate.\n"
+    if phase == "aggregate-result":
+        output = _report_output_path(args.output or DEFAULT_RESULT_AGGREGATE_PATH)
+        paths = _result_observation_paths(args.result_observation or args.observation)
+        write_result_aggregate_files(paths, output, bundle=selected_bundle)
+        return "Wrote QuantConnect result aggregate.\n"
     if phase == "evidence":
         path = args.aggregate_record or args.output or DEFAULT_AGGREGATE_PATH
         evidence = load_aggregate_record(path, bundle=selected_bundle)
+        return deterministic_json(evidence)
+    if phase == "evidence-result":
+        path = args.aggregate_record or args.output or DEFAULT_RESULT_AGGREGATE_PATH
+        evidence = load_result_aggregate(path, bundle=selected_bundle)
         return deterministic_json(evidence)
     raise WalkForwardOperatorError("unsupported walk-forward phase")
 
@@ -162,6 +212,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except WalkForwardObservationError:
         print("Error: walk-forward artifact validation failed", file=sys.stderr)
+        return 2
+    except WalkForwardResultError:
+        print("Error: QuantConnect result artifact validation failed", file=sys.stderr)
         return 2
     except WalkForwardOperatorError as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -193,9 +246,15 @@ def _validate_inputs(args: argparse.Namespace, bundle: ProtocolBundle) -> list[s
     for index, path in enumerate(args.observation, start=1):
         load_observation(path, bundle=bundle)
         validated.append(f"normalized_observation_{index}")
+    for index, path in enumerate(args.result_observation, start=1):
+        load_result_observation(path, bundle=bundle)
+        validated.append(f"normalized_result_observation_{index}")
     if args.input_log is not None:
         parse_observation_log(args.input_log, bundle=bundle)
         validated.append("raw_observation_log")
+    if args.input_result is not None:
+        parse_result_json(args.input_result, bundle=bundle)
+        validated.append("quantconnect_result_json")
     if args.aggregate_record is not None:
         load_aggregate_record(args.aggregate_record, bundle=bundle)
         validated.append("aggregate_record")
@@ -206,6 +265,16 @@ def _observation_paths(values: Sequence[Path]) -> tuple[Path, ...]:
     if values:
         if len(values) != len(FOLD_IDS):
             raise WalkForwardOperatorError("aggregate requires exactly five --observation paths")
+        return tuple(values)
+    return tuple(REPORT_DIRECTORY / f"{fold_id}.json" for fold_id in FOLD_IDS)
+
+
+def _result_observation_paths(values: Sequence[Path]) -> tuple[Path, ...]:
+    if values:
+        if len(values) != len(FOLD_IDS):
+            raise WalkForwardOperatorError(
+                "aggregate-result requires exactly five result observation paths"
+            )
         return tuple(values)
     return tuple(REPORT_DIRECTORY / f"{fold_id}.json" for fold_id in FOLD_IDS)
 
@@ -224,7 +293,9 @@ def _report_output_path(path: Path) -> Path:
 
 __all__ = [
     "DEFAULT_AGGREGATE_PATH",
+    "DEFAULT_RESULT_AGGREGATE_PATH",
     "PROJECT_NAME",
+    "PROJECT_REFERENCE",
     "REPORT_DIRECTORY",
     "CloudBacktestCommand",
     "WalkForwardOperatorError",

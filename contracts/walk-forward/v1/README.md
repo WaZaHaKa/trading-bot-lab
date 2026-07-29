@@ -12,6 +12,27 @@ configuration so editing the manifest cannot silently redefine this version.
 Changing a fold, parameter, safeguard, cost, result field, or identity rule
 requires a future protocol version.
 
+## Two distinct evidence formats
+
+The canonical algorithm-log path remains authoritative for algorithm-only state.
+`observation.schema.json` and `aggregate-record.schema.json` cover that format;
+`extract`, `aggregate`, and `evidence` preserve their existing behavior.
+
+QuantConnect Download Results JSON cannot supply every algorithm-only field, so
+it has a separate closed contract in `result-observation.schema.json` and
+`result-aggregate-record.schema.json`. `extract-result`, `aggregate-result`, and
+`evidence-result` validate that format offline. A result observation records
+`source_format=quantconnect_result_json`; an aggregate requires that same source
+format for all five folds and cannot mix it with `canonical_algorithm_log`.
+
+Result import validates completed state, exact names and parameters, fixed dates,
+cash/USD configuration, no out-of-sample period, official performance fields,
+SPY-only orders and fill events, final-position consistency, and an unambiguous
+Benchmark chart spanning the fold. It uses precise `totalPerformance` fields in
+preference to display strings. Display ratios may differ by at most `0.0005`
+and currency values by at most USD `0.01`, solely to accommodate QuantConnect's
+published rounding. Total return is recomputed from start/end equity.
+
 ## Identities and canonical JSON
 
 - Schema and public configuration hashes cover their exact checked-out UTF-8
@@ -30,9 +51,10 @@ requires a future protocol version.
   and a final newline. Writes use a same-directory temporary file and atomic
   replacement after symlink/reparse checks.
 
-Raw cloud output remains under ignored `logs/` or LEAN `backtests/`. Normalized
-working observations and aggregates remain under ignored `reports/`. Only a
-separately reviewed sanitized record may become tracked evidence.
+Raw cloud output remains under ignored `logs/`, LEAN `backtests/`, or other
+private untracked storage. Full Download Results JSON is never tracked.
+Normalized working observations and aggregates remain under ignored `reports/`.
+Only a separately reviewed sanitized record may become tracked evidence.
 Operator writes are confined to `reports/walk-forward/v1`, and aggregate output
 may not alias a fold input. Inputs must be regular files. Total raw-log,
 normalized-observation, and aggregate-record reads are capped at 8 MiB, 64 KiB,
@@ -47,7 +69,27 @@ never create a promotion threshold. Runtime-version drift is reported without
 being reclassified as strategy quality.
 
 The repository operator defaults to a read-only plan. It can print exactly five
-future commands but contains no cloud-run phase and never invokes LEAN, a
-network, optimization, data download, Object Store, paper trading, live trading,
-or a broker. No cloud backtest has been executed for this protocol. Separate
-human authorization is required before any printed command may be run.
+future commands using the private environment placeholder
+`$LEAN_WALK_FORWARD_PROJECT_ID`, no `--push`, and the exact `fold-id` plus
+`optimization-mode=false` parameters. It contains no cloud-run phase and never
+invokes LEAN, a network, optimization, data download, Object Store, paper
+trading, live trading, or a broker.
+
+A valid private `wf-v1-spy-2021` Download Results JSON exists outside this
+repository and must not be rerun. It is not tracked evidence. Importing it is a
+manual offline operator step after downloading it from the QuantConnect result
+page's Overview tab. The raw file stays private and untracked:
+
+```bash
+python scripts/run_walk_forward_v1.py extract-result \
+  --input-result <quantconnect-result.json> \
+  --output reports/walk-forward/v1/spy-2021.json
+python scripts/run_walk_forward_v1.py validate \
+  --result-observation reports/walk-forward/v1/spy-2021.json
+```
+
+Download Results JSON supports official completion/configuration, performance,
+order/fill, and benchmark claims. It cannot prove engine version, algorithm risk
+halt state, estimated slippage, or rejected-order count; those remain explicitly
+unavailable rather than fabricated. Separate authorization is required before
+any still-unexecuted printed fold command may be run.

@@ -146,11 +146,12 @@ Each dataset should eventually have:
 
 ## Fixed walk-forward v1 data boundary
 
-A future separately authorized walk-forward cloud backtest may read only
+A separately authorized walk-forward cloud backtest may read only
 QuantConnect's cloud-available adjusted daily SPY data. Repository tooling does
 not download, upload, copy, transform, buy, or cache those market-data bytes and
-does not use Object Store. No such data action or walk-forward cloud execution
-has occurred.
+does not use Object Store. A valid private `wf-v1-spy-2021` result already
+exists outside the repository and must not be rerun. This importer change
+executes no cloud backtest or data operation.
 
 The public folds remain the inclusive calendar intervals `spy-2021` through
 `spy-2025` defined in `contracts/walk-forward/v1/protocol.json`. Each project run
@@ -160,16 +161,19 @@ completed adjusted bars before a fold start only to seed trailing history. It
 cannot submit an order or contribute a trade or metric, and no later fold may
 influence fixed parameters.
 
-Future raw CLI/engine logs and backtest output belong only under ignored local
-artifact roots. Normalized per-fold observations and aggregates also remain
-ignored until a separate sanitization and review step. A tracked record may
-contain only the closed schema fields and content hashes; it must exclude raw
-logs, paths, URLs, emails, account/organization/project/cloud/backtest identity,
-billing data, credentials, tokens, licenses, and raw order IDs.
+Raw CLI/engine logs and full Download Results JSON belong only under ignored
+local artifact roots or other private untracked storage. Normalized per-fold
+observations and aggregates also remain ignored until a separate sanitization
+and review step. A tracked record may contain only the closed schema fields and
+content hashes; it must exclude raw logs/results, paths, URLs, hostnames, emails,
+account/organization/project/cloud/backtest identity, billing data, credentials,
+tokens, licenses, and raw order IDs.
 
-Extraction uses bounded physical-line reading, requires one canonical payload,
-rejects duplicate keys and non-finite numbers, and validates fold, protocol,
-schema, source, configuration, and dotted runtime identity. Aggregation derives
-only from the exact five canonical observations. Sanitized evidence remains a
-content-bound research record, not proof of market-data quality or strategy
-performance.
+Canonical extraction uses bounded physical-line reading and requires one
+canonical payload. Result-JSON extraction uses a bounded regular UTF-8 JSON
+file, rejects duplicate keys/non-finite values, validates completed state,
+fixed parameters/dates/configuration, SPY orders/events, final position, and an
+unambiguous Benchmark chart, then strips all private metadata. Each aggregate
+requires exactly five observations of one explicit source type. Sanitized
+evidence remains a content-bound research record, not proof of market-data
+quality or strategy performance.

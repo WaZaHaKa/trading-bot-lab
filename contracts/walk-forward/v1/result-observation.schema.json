@@ -1,0 +1,289 @@
+{
+  "$defs": {
+    "canonicalDecimal": {
+      "pattern": "^(?:0|-?(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$",
+      "type": "string"
+    },
+    "nonNegativeDecimal": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/canonicalDecimal"
+        },
+        {
+          "pattern": "^(?:0|[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9])$"
+        }
+      ]
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:trading-bot-lab:walk-forward:v1:result-observation",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "configuration": {
+      "additionalProperties": false,
+      "properties": {
+        "account_currency": {
+          "const": "USD"
+        },
+        "account_type": {
+          "const": "cash"
+        },
+        "name": {
+          "pattern": "^wf-v1-spy-202[1-5]$",
+          "type": "string"
+        },
+        "out_of_sample_days": {
+          "const": 0
+        },
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "fold-id": {
+              "enum": [
+                "spy-2021",
+                "spy-2022",
+                "spy-2023",
+                "spy-2024",
+                "spy-2025"
+              ]
+            },
+            "optimization-mode": {
+              "const": "false"
+            }
+          },
+          "required": [
+            "fold-id",
+            "optimization-mode"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "account_currency",
+        "account_type",
+        "name",
+        "out_of_sample_days",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "evaluation_end": {
+      "format": "date",
+      "type": "string"
+    },
+    "evaluation_start": {
+      "format": "date",
+      "type": "string"
+    },
+    "fold_id": {
+      "enum": [
+        "spy-2021",
+        "spy-2022",
+        "spy-2023",
+        "spy-2024",
+        "spy-2025"
+      ]
+    },
+    "metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "derived": {
+          "additionalProperties": false,
+          "properties": {
+            "benchmark_ending_value": {
+              "$ref": "#/$defs/nonNegativeDecimal"
+            },
+            "benchmark_return": {
+              "$ref": "#/$defs/canonicalDecimal"
+            },
+            "benchmark_starting_value": {
+              "$ref": "#/$defs/nonNegativeDecimal"
+            },
+            "excess_return": {
+              "$ref": "#/$defs/canonicalDecimal"
+            },
+            "total_return": {
+              "$ref": "#/$defs/canonicalDecimal"
+            }
+          },
+          "required": [
+            "benchmark_ending_value",
+            "benchmark_return",
+            "benchmark_starting_value",
+            "excess_return",
+            "total_return"
+          ],
+          "type": "object"
+        },
+        "directly_reported": {
+          "additionalProperties": false,
+          "properties": {
+            "ending_equity_usd": {
+              "$ref": "#/$defs/nonNegativeDecimal"
+            },
+            "maximum_drawdown": {
+              "$ref": "#/$defs/nonNegativeDecimal"
+            },
+            "order_count": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "probabilistic_sharpe_ratio": {
+              "$ref": "#/$defs/nonNegativeDecimal"
+            },
+            "sharpe_ratio": {
+              "$ref": "#/$defs/canonicalDecimal"
+            },
+            "sortino_ratio": {
+              "$ref": "#/$defs/canonicalDecimal"
+            },
+            "starting_equity_usd": {
+              "const": "100000"
+            },
+            "total_fees_usd": {
+              "$ref": "#/$defs/nonNegativeDecimal"
+            }
+          },
+          "required": [
+            "ending_equity_usd",
+            "maximum_drawdown",
+            "order_count",
+            "probabilistic_sharpe_ratio",
+            "sharpe_ratio",
+            "sortino_ratio",
+            "starting_equity_usd",
+            "total_fees_usd"
+          ],
+          "type": "object"
+        },
+        "unavailable": {
+          "const": [
+            "algorithm_risk_halt_state",
+            "engine_version",
+            "estimated_slippage_usd",
+            "rejected_order_count"
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "derived",
+        "directly_reported",
+        "unavailable"
+      ],
+      "type": "object"
+    },
+    "orders": {
+      "additionalProperties": false,
+      "properties": {
+        "completed_order_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "final_position_quantity": {
+          "$ref": "#/$defs/nonNegativeDecimal"
+        },
+        "final_position_state": {
+          "enum": [
+            "cash",
+            "long"
+          ]
+        }
+      },
+      "required": [
+        "completed_order_count",
+        "final_position_quantity",
+        "final_position_state"
+      ],
+      "type": "object"
+    },
+    "protocol": {
+      "additionalProperties": false,
+      "properties": {
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "name": {
+          "const": "fixed_parameter_rolling_walk_forward"
+        },
+        "version": {
+          "const": "1.0.0"
+        }
+      },
+      "required": [
+        "content_sha256",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "record_type": {
+      "const": "walk_forward_result_observation"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "importer_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "importer_schema_version": {
+          "const": "1.0.0"
+        },
+        "project_source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "public_configuration_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_verification_attestation": {
+          "const": "selected_private_cloud_project_source_and_public_configuration_verified_against_merged_repository_before_execution"
+        }
+      },
+      "required": [
+        "importer_schema_sha256",
+        "importer_schema_version",
+        "project_source_sha256",
+        "public_configuration_sha256",
+        "source_verification_attestation"
+      ],
+      "type": "object"
+    },
+    "source_format": {
+      "const": "quantconnect_result_json"
+    },
+    "state": {
+      "additionalProperties": false,
+      "properties": {
+        "completion_status": {
+          "const": "completed"
+        }
+      },
+      "required": [
+        "completion_status"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "configuration",
+    "evaluation_end",
+    "evaluation_start",
+    "fold_id",
+    "metrics",
+    "orders",
+    "protocol",
+    "record_type",
+    "schema_version",
+    "source",
+    "source_format",
+    "state"
+  ],
+  "type": "object"
+}

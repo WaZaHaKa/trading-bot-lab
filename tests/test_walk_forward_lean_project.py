@@ -102,11 +102,12 @@ def test_project_is_public_safe_and_has_no_network_live_optimization_or_object_s
     assert config == {
         "algorithm-language": "Python",
         "description": (
-            "Research-only fixed-parameter SPY walk-forward v1. Backtest only, "
-            "live and optimization modes forbidden."
+            "Research-only fixed-parameter SPY walk-forward v1. Backtest only. "
+            "Live and optimization modes forbidden."
         ),
         "parameters": {"fold-id": "__required__", "optimization-mode": "false"},
     }
+    assert all(character not in config["description"] for character in (",", ";"))
     assert imports.isdisjoint(
         {"aiohttp", "httpx", "requests", "socket", "urllib", "websocket", "websockets"}
     )

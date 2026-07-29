@@ -95,10 +95,10 @@
     "algorithm_name": "WalkForwardMovingAverageV1",
     "project_name": "Strategies/WalkForwardMovingAverageV1",
     "public_configuration_hash_method": "sha256_exact_utf8_lf_bytes",
-    "public_configuration_sha256": "034571b4a1a8406ced12ba2d9ccd8d62449ade3c8d231cdc3b06c036f9089fff",
+    "public_configuration_sha256": "839060795b82448e3fa54d0dc2455b6997e4067f73b6219a190850501e65765f",
     "source_hash_method": "sha256_utf8_lf_with_source_identity_slot_zeroed",
     "source_identity_slot": "PROJECT_SOURCE_SHA256",
-    "source_sha256": "bfa754090510c26c228e8bbd115b7d9bf49279f255d03f180585f978a94ac20c"
+    "source_sha256": "08643561aba659aed94b3b60bf592131b8bb7abbded2a80a2c1775342fbd9c97"
   },
   "protocol_name": "fixed_parameter_rolling_walk_forward",
   "protocol_schema_sha256": "30dc51fe7cdf5df7dd531f4bc6c1a19e34a7648a4b1c9851178bd77c54243cfd",

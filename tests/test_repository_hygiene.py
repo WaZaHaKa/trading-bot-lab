@@ -413,6 +413,38 @@ def test_preflight_linkage_check_uses_staged_not_worktree_bytes(tmp_path: Path) 
     assert _tracked_lean_metadata_findings(tmp_path, [relative]) == []
 
 
+def test_preflight_reproduces_lean_cloud_push_description_comma_contract(
+    tmp_path: Path,
+) -> None:
+    initialize_git_fixture(tmp_path)
+    relative = "lean-workspace/Strategies/WalkForwardMovingAverageV1/config.json"
+    config = tmp_path / relative
+    config.parent.mkdir(parents=True)
+    description = (
+        "Research-only fixed-parameter SPY walk-forward v1. Backtest only, "
+        "live and optimization modes forbidden."
+    )
+    config.write_text(
+        json.dumps(
+            {
+                "algorithm-language": "Python",
+                "description": description,
+                "parameters": {"fold-id": "__required__", "optimization-mode": "false"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "--", relative], cwd=tmp_path, check=True)
+
+    expected = [
+        f"{relative} description violates the LEAN cloud push contract: "
+        "Invalid character ',' found in input string at position 64."
+    ]
+    assert description.index(",") == 64
+    assert _lean_workspace_findings(tmp_path, [relative]) == expected
+    assert _tracked_lean_metadata_findings(tmp_path, [relative]) == expected
+
+
 def test_preflight_rejects_staged_sensitive_key_hidden_by_clean_worktree(tmp_path: Path) -> None:
     initialize_git_fixture(tmp_path)
     relative = "lean-workspace/Strategies/Example/config.json"

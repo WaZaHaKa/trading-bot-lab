@@ -205,6 +205,9 @@ and a chronologically non-short position. In the latter case
 events or fees are never fabricated.
 
 `result-aggregate-record.schema.json` requires all five unique fixed folds and
-one source format. Its summaries are descriptive only. Valid private 2021 and
-2022 Download Results files exist outside the repository and must not be rerun;
-the full files and normalized working records remain untracked and ignored.
+one source format and fully recomputes every summary from the embedded folds.
+All five official 2021-2025 Download Results files remain private and must not
+be rerun; the normalized per-fold records and generated working aggregate stay
+untracked and ignored. The separately reviewed deterministic aggregate is
+tracked at `contracts/walk-forward/v1/2026-07-29-result-aggregate.json`. Its
+summaries are descriptive only.

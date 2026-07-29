@@ -733,3 +733,51 @@ quality threshold. Zero walk-forward cloud executions and zero fold results
 exist. A separate human authorization is required before exactly the five
 printed commands may be run; no profitability, robustness, paper-readiness, or
 live-readiness conclusion exists.
+
+## 2026-07-29 - Completed fixed walk-forward cloud results v1
+
+### Execution boundary
+
+The five predeclared `wf-v1-spy-2021` through `wf-v1-spy-2025` runs are
+complete. This evidence phase was entirely offline: it started no cloud run,
+reran no fold, changed no QuantConnect project source or configuration, used
+no `--push`, and performed no data, Object Store, optimization, broker, paper,
+or live action.
+
+### Offline import and validation
+
+The full official Download Results files remained private outside the repository
+with restrictive permissions. All five were imported through the merged strict
+result importer, validated individually with their normalized observations, and
+validated together before exact-five aggregation. Protocol, source,
+configuration, schema, fold, date, parameter, completion, order, position,
+benchmark, and fee checks all passed.
+
+### Sanitized result
+
+The exact-five aggregate reports `walk_forward_result_contract_complete` and
+five completed folds. None of the official downloads included `orderEvents`, so
+all normalized fees use `overview_runtime_rounded` at `rounded_to_cent` precision
+with event-level fee evidence explicitly unavailable. Overview and runtime
+whole-backtest fee displays reconciled under the unchanged USD `0.01` bound.
+
+Descriptively, four folds had positive strategy returns and one beat its
+benchmark. Median strategy return is `0.01084085`, median benchmark return is
+`0.248862356640464819099751101`, median excess return is
+`-0.232121822640464819099751101`, worst fold return is `-0.025180004`, worst
+maximum drawdown is `0.027`, and the five folds total 85 orders and USD 85 fees.
+
+### Evidence and privacy
+
+The separately reviewed deterministic record is tracked at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`. Its embedded folds
+fully recompute every summary and contain only closed-schema sanitized fields.
+No raw result, normalized working observation, cloud/project/backtest ID, URL,
+hostname, account metadata, private path, credential, or raw order ID is tracked.
+
+### Decision
+
+`walk_forward_result_contract_complete` means only that the exact fixed v1
+evidence contract completed. No return, benchmark comparison, or ratio creates a
+promotion threshold. The result is not a profitability, statistical-robustness,
+paper-readiness, or live-readiness conclusion.

@@ -355,9 +355,11 @@ Results JSON without weakening or replacing the canonical-log contract.
 
 The printer emits exactly five ordered commands using
 `"$LEAN_WALK_FORWARD_PROJECT_ID"`, no `--push`, and exactly two parameters:
-`fold-id=<fixed-fold>` and `optimization-mode=false`. It does not execute them.
+`fold-id=<fixed-fold>` and `optimization-mode=false`. All five authorized runs
+are complete and must not be rerun. The printer remains a closed, non-executing
+representation of that command set.
 
-After any authorized run, raw logs/results remain ignored. Canonical-log
+After the completed authorized runs, raw logs/results remain ignored. Canonical-log
 extraction requires exactly one bounded canonical observation, rejects
 identity-bearing content and provenance/schema drift, and binds source and
 public configuration. Download Results extraction validates official state,
@@ -388,10 +390,10 @@ requires all five folds, presents each fold before descriptive summaries, and
 reports runtime consistency separately. Contract completion is not strategy
 approval and no arbitrary performance threshold exists.
 
-Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` Download Results JSON
-files exist outside the repository and must not be rerun. Download Results are
-obtained manually from each completed result's Overview tab; keep every full
-file private/untracked and import it with:
+All five private `wf-v1-spy-2021` through `wf-v1-spy-2025` Download Results
+JSON files remain outside the repository and must not be rerun. Keep every full
+file and normalized per-fold observation private/untracked; the offline import
+pattern is:
 
 ```bash
 python scripts/run_walk_forward_v1.py extract-result \
@@ -401,7 +403,11 @@ python scripts/run_walk_forward_v1.py validate \
   --result-observation reports/walk-forward/v1/<fold-id>.json
 ```
 
-This importer change executes zero cloud backtests, optimizations, data
+This offline evidence phase executes zero cloud backtests, optimizations, data
 operations, Object Store actions, broker/exchange actions, paper trades, or live
-trades. No normalized fold or aggregate is tracked, and no profitability,
-robustness, paper-readiness, or live-readiness claim exists.
+trades. `aggregate-result` writes the exact-five working aggregate below ignored
+`reports/walk-forward/v1`, and `evidence-result` fully recomputes it. The reviewed
+copy is tracked at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`; the five normalized
+folds remain ignored. Its descriptive metrics are not a profitability,
+robustness, paper-readiness, or live-readiness claim.

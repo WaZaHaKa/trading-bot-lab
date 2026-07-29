@@ -78,7 +78,9 @@ and never fabricated.
 Raw cloud output remains under ignored `logs/`, LEAN `backtests/`, or other
 private untracked storage. Full Download Results JSON is never tracked.
 Normalized working observations and aggregates remain under ignored `reports/`.
-Only a separately reviewed sanitized record may become tracked evidence.
+The separately reviewed sanitized exact-five result aggregate is tracked at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`; no raw or working
+artifact is tracked.
 Operator writes are confined to `reports/walk-forward/v1`, and aggregate output
 may not alias a fold input. Inputs must be regular files. Total raw-log,
 normalized-observation, and aggregate-record reads are capped at 8 MiB, 64 KiB,
@@ -92,18 +94,19 @@ five-fold evidence contract completed or failed; returns and benchmark results
 never create a promotion threshold. Runtime-version drift is reported without
 being reclassified as strategy quality.
 
-The repository operator defaults to a read-only plan. It can print exactly five
-future commands using the private environment placeholder
+The repository operator defaults to a read-only plan. It can still print the
+exact five closed commands using the private environment placeholder
 `$LEAN_WALK_FORWARD_PROJECT_ID`, no `--push`, and the exact `fold-id` plus
 `optimization-mode=false` parameters. It contains no cloud-run phase and never
 invokes LEAN, a network, optimization, data download, Object Store, paper
 trading, live trading, or a broker.
 
-Valid private `wf-v1-spy-2021` and `wf-v1-spy-2022` Download Results JSON
-files exist outside this repository and must not be rerun. They are not tracked
-evidence. Importing either is a manual offline operator step after downloading
-it from the QuantConnect result page's Overview tab. Each raw file stays private
-and untracked:
+The five authorized cloud runs are complete and must not be rerun.
+
+All five private `wf-v1-spy-2021` through `wf-v1-spy-2025` Download Results
+JSON files remain outside this repository and must not be rerun. Each raw file
+and every normalized per-fold working observation stays private and untracked;
+the offline import pattern is:
 
 ```bash
 python scripts/run_walk_forward_v1.py extract-result \
@@ -116,5 +119,5 @@ python scripts/run_walk_forward_v1.py validate \
 Download Results JSON supports official completion/configuration, performance,
 order/fill, and benchmark claims. It cannot prove engine version, algorithm risk
 halt state, estimated slippage, or rejected-order count; those remain explicitly
-unavailable rather than fabricated. Separate authorization is required before
-any still-unexecuted printed fold command may be run.
+unavailable rather than fabricated. This evidence phase authorizes no rerun or
+cloud, project, data, Object Store, optimization, paper, or live action.

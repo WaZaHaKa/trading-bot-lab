@@ -86,6 +86,16 @@
   not create an arbitrary promotion threshold or a strategy-quality verdict.
 - A walk-forward risk halt intentionally leaves an existing long position open
   and marked; unlike the historical cloud baseline, it never auto-liquidates.
+- Phase 0 freezes the fixed walk-forward v1 code and sanitized evidence as a
+  completed stock-research record. It authorizes no additional fold run,
+  optimization, paper deployment, or live stock deployment.
+- Live stock deployment is deferred for capital and QuantConnect infrastructure
+  economics. This is not a technical deployment failure and does not make the
+  completed research a profitability or readiness claim.
+- Active development is moving to a separate Freqtrade crypto-spot project.
+  This repository does not yet validate any crypto venue, pair, fee tier,
+  precision, minimum order, continuous-market data policy, strategy, dry-run,
+  or live execution path. The completed SPY evidence cannot validate them.
 - The repository is public but has no selected open-source license.
 
 Cloud and local backtests are hypothetical, place no real orders, are not

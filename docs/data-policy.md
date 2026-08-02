@@ -64,6 +64,167 @@ No such data operation was performed for the parity implementation.
 
 See `qcc-guardrails.md`.
 
+## Restricted backup for the five private QuantConnect results
+
+The five official `wf-v1-spy-2021` through `wf-v1-spy-2025` Download Results
+JSON files are private source evidence. Keep the primary backup outside this
+repository, outside any public or shared working tree, and preferably outside
+automatically shared or synced folders. Never place a raw result, normalized
+working observation, hash manifest, restore copy, or encrypted archive in this
+repository. Never use `git add -f` to override the artifact boundary.
+
+The procedure below is an operator runbook, not an automated repository task.
+Run it only against the existing five downloads; it must not start or rerun a
+QuantConnect backtest.
+
+### 1. Prepare and restrict the destination
+
+Confirm the five existing downloads have been mapped to these canonical backup
+names without modifying their bytes:
+
+```text
+wf-v1-spy-2021.json
+wf-v1-spy-2022.json
+wf-v1-spy-2023.json
+wf-v1-spy-2024.json
+wf-v1-spy-2025.json
+```
+
+Set placeholders to private locations outside the repository, create the backup
+directory, remove inherited access, and grant access only to the current Windows
+identity and `SYSTEM`:
+
+```powershell
+$SourceRoot = (Resolve-Path '<PRIVATE_RESULTS_SOURCE>').Path
+$BackupRoot = '<RESTRICTED_BACKUP_ROOT>\trading-bot-lab\fixed-walk-forward-v1'
+$Identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$ExpectedNames = 2021..2025 | ForEach-Object { "wf-v1-spy-$_.json" }
+
+New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
+icacls.exe $BackupRoot /inheritance:r
+icacls.exe $BackupRoot /grant:r "$($Identity):(OI)(CI)F" "SYSTEM:(OI)(CI)F"
+if ($LASTEXITCODE -ne 0) { throw 'Failed to set restricted backup permissions.' }
+icacls.exe $BackupRoot
+```
+
+Stop if the access list contains a broad principal such as `Everyone`, `Users`,
+or `Authenticated Users`, or any identity that is not explicitly intended.
+On a non-Windows host, use an owner-only directory (`chmod 700`) and owner-only
+files (`chmod 600`), then verify with `stat`; do not assume a network filesystem
+honors local permission bits.
+
+### 2. Copy exactly five files and create the hash manifest
+
+Copy the canonical files, require exactly five JSON files, record each byte size
+and SHA-256, and hash the manifest itself:
+
+```powershell
+foreach ($Name in $ExpectedNames) {
+    $SourcePath = Join-Path $SourceRoot $Name
+    if (-not (Test-Path -LiteralPath $SourcePath -PathType Leaf)) {
+        throw "Missing private result: $Name"
+    }
+    Copy-Item -LiteralPath $SourcePath -Destination (Join-Path $BackupRoot $Name)
+}
+
+$BackedUpJson = @(Get-ChildItem -LiteralPath $BackupRoot -File -Filter '*.json')
+if ($BackedUpJson.Count -ne 5) { throw 'Backup must contain exactly five result JSON files.' }
+
+$FileRecords = foreach ($Name in $ExpectedNames) {
+    $Path = Join-Path $BackupRoot $Name
+    $Item = Get-Item -LiteralPath $Path
+    [ordered]@{
+        file = $Name
+        size_bytes = $Item.Length
+        sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+    }
+}
+$Manifest = [ordered]@{
+    schema_version = 1
+    expected_file_count = 5
+    created_at_utc = [DateTime]::UtcNow.ToString('o')
+    files = @($FileRecords)
+}
+$ManifestPath = Join-Path $BackupRoot 'sha256-manifest.json'
+$Manifest | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 -LiteralPath $ManifestPath
+Get-FileHash -Algorithm SHA256 -LiteralPath $ManifestPath
+icacls.exe $BackupRoot /verify /t /c
+if ($LASTEXITCODE -ne 0) { throw 'Backup ACL verification failed.' }
+```
+
+Read the displayed ACL and manifest before declaring success. Confirm there are
+five unique names, five nonzero sizes, and five 64-character lowercase SHA-256
+values. Record the manifest hash in a separate private operator record. A hash
+proves byte equality during restore; it does not make the private result safe to
+publish.
+
+### 3. Optional encrypted archive
+
+For offline or removable-media redundancy, create a 7-Zip archive with AES-256
+content encryption and encrypted filenames. Keep the archive outside the
+repository. Use interactive password entry so the passphrase is not stored in
+the command, script, environment, or shell history:
+
+```powershell
+$ArchivePath = '<RESTRICTED_ARCHIVE_ROOT>\fixed-walk-forward-v1.7z'
+7z.exe a -t7z -mhe=on $ArchivePath "$BackupRoot\*" -p
+7z.exe t $ArchivePath -p
+if ($LASTEXITCODE -ne 0) { throw 'Encrypted archive verification failed.' }
+```
+
+Store the passphrase separately from the archive and test recovery before
+relying on it. Windows `Compress-Archive` does not provide this encryption and
+must not be treated as an encrypted backup. Do not remove the restricted source
+backup merely because archive creation returned success.
+
+### 4. Restore and verify without rerunning a fold
+
+Restore into a newly created restricted directory outside the repository. Apply
+the same ACL procedure before extraction or copying. Then compare every restored
+file against the original manifest and reject missing, extra, resized, or
+hash-mismatched JSON:
+
+```powershell
+$RestoreRoot = '<RESTRICTED_RESTORE_ROOT>\fixed-walk-forward-v1-restore-test'
+New-Item -ItemType Directory -Force -Path $RestoreRoot | Out-Null
+icacls.exe $RestoreRoot /inheritance:r
+icacls.exe $RestoreRoot /grant:r "$($Identity):(OI)(CI)F" "SYSTEM:(OI)(CI)F"
+if ($LASTEXITCODE -ne 0) { throw 'Failed to restrict the restore directory.' }
+
+$RestoreSourceRoot = $BackupRoot
+# To test the encrypted archive instead, extract it interactively into another
+# restricted directory and set $RestoreSourceRoot to that directory.
+$Recorded = Get-Content -Raw -LiteralPath $ManifestPath | ConvertFrom-Json
+if ($Recorded.expected_file_count -ne 5 -or $Recorded.files.Count -ne 5) {
+    throw 'Manifest does not describe exactly five files.'
+}
+# Copy from the restricted backup, or extract the encrypted archive interactively.
+foreach ($Record in $Recorded.files) {
+    Copy-Item -LiteralPath (Join-Path $RestoreSourceRoot $Record.file) -Destination $RestoreRoot
+}
+
+$RestoredJson = @(Get-ChildItem -LiteralPath $RestoreRoot -File -Filter '*.json')
+if ($RestoredJson.Count -ne 5) { throw 'Restore must contain exactly five result JSON files.' }
+foreach ($Record in $Recorded.files) {
+    $RestoredPath = Join-Path $RestoreRoot $Record.file
+    if (-not (Test-Path -LiteralPath $RestoredPath -PathType Leaf)) {
+        throw "Restored file is missing: $($Record.file)"
+    }
+    $RestoredItem = Get-Item -LiteralPath $RestoredPath
+    $RestoredHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RestoredPath).Hash.ToLowerInvariant()
+    if ($RestoredItem.Length -ne $Record.size_bytes -or $RestoredHash -ne $Record.sha256) {
+        throw "Restore verification failed: $($Record.file)"
+    }
+}
+icacls.exe $RestoreRoot /verify /t /c
+if ($LASTEXITCODE -ne 0) { throw 'Restore ACL verification failed.' }
+```
+
+The restore test succeeds only when all five byte sizes and hashes match and the
+restricted ACL is still in force. Do not use a new cloud execution as a restore
+test. After verification, retain or remove the temporary restore copy according
+to the operator's private retention policy; no repository change is required.
+
 ## Local data layout
 
 ```text

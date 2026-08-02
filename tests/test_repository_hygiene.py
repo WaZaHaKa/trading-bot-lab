@@ -11,7 +11,10 @@ from pathlib import Path
 import pytest
 
 from scripts.preflight_check import (
+    FROZEN_EVIDENCE_SHA256,
+    _frozen_evidence_findings,
     _lean_workspace_findings,
+    _private_result_findings,
     _tracked_artifact_findings,
     _tracked_lean_metadata_findings,
     _walk_sensitive_json,
@@ -528,6 +531,85 @@ def test_preflight_rejects_force_tracked_operator_linkage_file() -> None:
 )
 def test_preflight_rejects_tracked_walk_forward_outputs(relative: str, expected: str) -> None:
     assert _tracked_artifact_findings([relative]) == [f"{expected}: {relative}"]
+
+
+def test_preflight_pins_completed_walk_forward_result_evidence() -> None:
+    relative = "contracts/walk-forward/v1/2026-07-29-result-aggregate.json"
+
+    assert {
+        relative: "f8ad1fa47b03862835d032edadcb1ce684ec9d695dcc72b03bd27fdd15ba933e"
+    } == FROZEN_EVIDENCE_SHA256
+    assert _frozen_evidence_findings(ROOT) == []
+
+
+def test_preflight_detects_worktree_and_staged_frozen_evidence_changes(tmp_path: Path) -> None:
+    initialize_git_fixture(tmp_path)
+    relative = "evidence/result.json"
+    original = b'{"frozen":true}\n'
+    changed = b'{"frozen":false}\n'
+    expected = {relative: sha256(original).hexdigest()}
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    path.write_bytes(original)
+    subprocess.run(["git", "add", "--", relative], cwd=tmp_path, check=True)
+
+    assert _frozen_evidence_findings(tmp_path, expected) == []
+
+    path.write_bytes(changed)
+    assert _frozen_evidence_findings(tmp_path, expected) == [
+        f"frozen evidence working-tree bytes changed: {relative}"
+    ]
+
+    subprocess.run(["git", "add", "--", relative], cwd=tmp_path, check=True)
+    assert _frozen_evidence_findings(tmp_path, expected) == [
+        f"frozen evidence working-tree bytes changed: {relative}",
+        f"frozen evidence staged bytes changed: {relative}",
+    ]
+
+
+def test_preflight_rejects_private_result_json_by_name_or_content(tmp_path: Path) -> None:
+    initialize_git_fixture(tmp_path)
+    private_payload = json.loads(
+        (ROOT / "tests/fixtures/walk-forward/v1/quantconnect-result-spy-2021.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    named_relative = "wf-v1-spy-2022.json"
+    disguised_relative = "notes/archive.json"
+    named_path = tmp_path / named_relative
+    disguised_path = tmp_path / disguised_relative
+    disguised_path.parent.mkdir(parents=True)
+    named_path.write_text("{}\n", encoding="utf-8")
+    disguised_path.write_text(json.dumps(private_payload), encoding="utf-8")
+
+    candidates = [named_relative, disguised_relative]
+    assert _private_result_findings(tmp_path, candidates, []) == [
+        f"private QuantConnect result JSON is forbidden in the repository: {named_relative}",
+        f"private QuantConnect result JSON is forbidden in the repository: {disguised_relative}",
+    ]
+
+
+def test_preflight_checks_staged_private_result_bytes_not_only_worktree(tmp_path: Path) -> None:
+    initialize_git_fixture(tmp_path)
+    relative = "notes/archive.json"
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    private_payload = (
+        ROOT / "tests/fixtures/walk-forward/v1/quantconnect-result-spy-2021.json"
+    ).read_text(encoding="utf-8")
+    path.write_text(private_payload, encoding="utf-8")
+    subprocess.run(["git", "add", "--", relative], cwd=tmp_path, check=True)
+    path.write_text('{"public_note":true}\n', encoding="utf-8")
+
+    assert _private_result_findings(tmp_path, [relative], [relative]) == [
+        f"private QuantConnect result JSON is forbidden in the repository: {relative}"
+    ]
+
+
+def test_preflight_allows_explicit_sanitized_result_fixture() -> None:
+    relative = "tests/fixtures/walk-forward/v1/quantconnect-result-spy-2021.json"
+
+    assert _private_result_findings(ROOT, [relative], [relative]) == []
 
 
 @pytest.mark.parametrize(

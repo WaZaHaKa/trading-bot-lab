@@ -1,21 +1,35 @@
 # trading-bot-lab
 
-Public, research-first platform for deterministic stock and cryptocurrency
+Public, research-first platform preserving the completed deterministic stock
 backtesting, QuantConnect LEAN cloud research, and fully local historical paper
-replay.
+replay baseline.
 
-LEAN cloud backtests are the primary cross-asset research path. The repository's
-Python runtime does not connect to a network, broker, exchange, or paid data
-service and remains the independent regression/accounting oracle. No component
-has a live-trading mode. Backtests are hypothetical, synthetic sample results
-are not meaningful market results, past performance does not guarantee future
-results, and nothing in this repository is financial advice.
+Phase 0 freezes the fixed walk-forward v1 stock-research record:
+
+```text
+LEAN_FIXED_WALK_FORWARD_V1_COMPLETE
+LIVE_STOCK_DEPLOYMENT_DEFERRED
+REASON: CAPITAL_AND_INFRASTRUCTURE_ECONOMICS
+ACTIVE_DEVELOPMENT_TARGET: SEPARATE_FREQTRADE_CRYPTO_SPOT_PROJECT
+```
+
+The completed LEAN/QuantConnect implementation and evidence remain preserved as
+the stock-research reference. No fold rerun or live stock deployment is
+authorized. Active product development is moving to a separate Freqtrade
+crypto-spot project; no crypto conclusion may be inferred from the SPY results.
+See `docs/project-status.md` for the decision record.
+
+The repository's Python runtime does not connect to a network, broker, exchange,
+or paid data service and remains the independent regression/accounting oracle.
+No component has a live-trading mode. Backtests are hypothetical, synthetic
+sample results are not meaningful market results, past performance does not
+guarantee future results, and nothing in this repository is financial advice.
 
 ## Active architecture
 
-LEAN is the primary strategy engine for cloud research/backtesting. The free
-local Python engine remains authoritative for its own deterministic timing,
-risk, and accounting contract:
+The completed LEAN cloud path remains the authoritative stock-research record.
+The free local Python engine remains authoritative for its own deterministic
+timing, risk, and accounting contract:
 
 ```text
 validated UTC OHLCV events
@@ -80,6 +94,7 @@ lean/                               preserved pre-activation LEAN files
 contracts/parity/                   versioned cross-engine comparison contract
 contracts/walk-forward/v1/          fixed five-fold protocol and evidence schemas
 docs/                               policies, workflows, schemas, and ADRs
+docs/project-status.md               current research/deployment/pivot decision
 ```
 
 ## Setup
@@ -233,6 +248,9 @@ LEAN workspace data, Object Store content, backtests, optimizations, live output
 and caches are also ignored. `lean-workspace/lean.json` is operator-local linkage
 state: keep it ignored, preserve any needed backup outside the repository, and
 never force-add it.
+The five private QuantConnect Download Results JSON files require a restricted,
+hash-verified backup outside the repository. Follow `docs/data-policy.md`; private
+results and their backup manifest or encrypted archive must never be committed.
 The CLI accepts in-repository reports only under `reports/` and logs only under
 `logs/`; absolute output paths outside the repository are allowed. Ignored
 repository-root `.pytest-*` and `.pytest_*` trees are reserved as automated-test
@@ -258,6 +276,10 @@ identity rejection, exact-five aggregation, runtime-drift reporting, atomic
 writes, raw-output ignores, the print-only command boundary, and deterministic
 privacy-safe recomputation of the tracked exact-five Download Results
 aggregate.
+Preflight also SHA-256 pins that public aggregate and rejects private
+QuantConnect result JSON by filename or official-result structure, including
+staged content hidden by different working-tree bytes. The one approved
+sanitized test fixture remains explicit and trackable.
 
 CI runs Python 3.11, Ruff, pytest, preflight, LEAN source/config static checks,
 parity-contract tests, and walk-forward contract/static tests on Ubuntu and
@@ -293,12 +315,16 @@ Additional LEAN and cross-engine limitations are maintained in
 
 ## Roadmap
 
-Fixed walk-forward v1 is complete for its five predeclared 2021-2025 cloud
-folds. The official results were imported, validated, aggregated, and reduced
-to one reviewed sanitized tracked record; all raw files and working observations
-remain private and ignored. No rerun is authorized. The descriptive evidence
-is not a profitability or robustness conclusion and creates no paper/live
-readiness. Live trading is not a recommended next milestone.
+Fixed walk-forward v1 is complete and frozen for its five predeclared 2021-2025
+cloud folds. The official results were imported, validated, aggregated, and
+reduced to one reviewed sanitized tracked record; all raw files and working
+observations remain private and untracked. No rerun is authorized. Live stock
+deployment is deferred because current capital and QuantConnect infrastructure
+economics do not justify that risk and cost. Active development moves to a
+separate Freqtrade crypto-spot project, initially spot-only and dry-run-first.
+That project must build and validate its own exchange, fee, precision, sizing,
+market-hours, and execution assumptions; this repository's SPY evidence does
+not transfer as crypto strategy evidence.
 
 ## License
 

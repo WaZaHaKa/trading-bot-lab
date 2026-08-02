@@ -781,3 +781,59 @@ hostname, account metadata, private path, credential, or raw order ID is tracked
 evidence contract completed. No return, benchmark comparison, or ratio creates a
 promotion threshold. The result is not a profitability, statistical-robustness,
 paper-readiness, or live-readiness conclusion.
+
+## 2026-08-02 - Phase 0 stock-research freeze and Freqtrade pivot
+
+### Scope
+
+This is a project-governance and evidence-preservation decision. It does not
+change strategy code, rerun a backtest, alter the fixed protocol, enable paper
+or live trading, or create a crypto strategy.
+
+### Completed baseline
+
+Fixed walk-forward v1 is complete for the five predeclared 2021-2025 SPY folds.
+The reviewed sanitized aggregate remains byte-pinned at
+`contracts/walk-forward/v1/2026-07-29-result-aggregate.json`. Existing LEAN and
+QuantConnect code, schemas, tests, and historical evidence remain preserved.
+The five private official Download Results remain outside the repository.
+
+### Economic decision
+
+Live stock deployment is deferred. The intended experimental capital and the
+recurring QuantConnect infrastructure cost do not justify paying for a risky,
+non-guaranteed live outcome. This is not a profitability claim and does not
+reinterpret the completed evidence as a failed implementation.
+
+### Active-development decision
+
+Active development pivots to a separate Freqtrade crypto-spot project. Reusable
+governance and validation patterns may be adapted, but the SPY strategy,
+whole-share sizing, stock fee assumptions, US-equity schedule, market-on-open
+execution, allocation, and five-fold results do not transfer to crypto.
+
+The intended new boundary is spot-only, long-or-cash, no leverage, one exchange,
+small fractional stakes, dry-run-first, and a separately declared crypto
+validation protocol. Exchange connectivity and crypto strategy code do not
+belong in this Phase 0 commit.
+
+### Preservation and privacy controls
+
+Preflight pins the reviewed public aggregate's exact SHA-256 and rejects private
+QuantConnect result JSON by filename or official-result structure. The data
+policy defines a restricted backup outside Git with ACL verification, an
+exact-five SHA-256 manifest, optional encrypted archive verification, and a
+hash-checked restore test.
+
+### Decision
+
+```text
+LEAN_FIXED_WALK_FORWARD_V1_COMPLETE
+LIVE_STOCK_DEPLOYMENT_DEFERRED
+REASON: CAPITAL_AND_INFRASTRUCTURE_ECONOMICS
+ACTIVE_DEVELOPMENT_TARGET: SEPARATE_FREQTRADE_CRYPTO_SPOT_PROJECT
+```
+
+The stock-research baseline is frozen. No fold rerun, evidence rewrite, or live
+stock deployment is authorized. Proceed with human review of this Phase 0
+checkpoint, then start the separate Freqtrade foundation as a new project.

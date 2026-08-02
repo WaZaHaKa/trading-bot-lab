@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from contextlib import suppress
+from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -21,6 +23,7 @@ REQUIRED_FILES = [
     "docs/execution-timing-comparison.md",
     "docs/cross-engine-parity.md",
     "docs/known-limitations.md",
+    "docs/project-status.md",
     "docs/lean-paused.md",
     "docs/local-backtesting.md",
     "docs/report-schemas.md",
@@ -290,6 +293,30 @@ ALLOWED_ARTIFACTS = {
     "reports/.gitkeep",
 }
 
+FROZEN_EVIDENCE_SHA256 = {
+    "contracts/walk-forward/v1/2026-07-29-result-aggregate.json": (
+        "f8ad1fa47b03862835d032edadcb1ce684ec9d695dcc72b03bd27fdd15ba933e"
+    ),
+}
+
+ALLOWED_QUANTCONNECT_RESULT_FILES = {
+    "tests/fixtures/walk-forward/v1/quantconnect-result-spy-2021.json",
+}
+PRIVATE_RESULT_FILENAME = re.compile(
+    r"(?:quantconnect.*results?|download[-_ ]*results?|"
+    r"wf[-_]?v1[-_]?spy[-_]?(?:2021|2022|2023|2024|2025))",
+    re.IGNORECASE,
+)
+PRIVATE_RESULT_TOP_LEVEL_KEYS = {
+    "algorithmconfiguration",
+    "charts",
+    "orders",
+    "runtimestatistics",
+    "state",
+    "statistics",
+    "totalperformance",
+}
+
 ALLOWED_TRACKED_CSV = {
     "data/sample/synthetic_spy_daily.csv",
     "tests/fixtures/parity/v1/synthetic_weekdays.csv",
@@ -401,6 +428,22 @@ def _git_index_text(root: Path, relative: str) -> tuple[str | None, str | None]:
         return completed.stdout.decode("utf-8"), None
     except UnicodeDecodeError:
         return None, f"{normalized} staged content is not UTF-8 text"
+
+
+def _git_index_bytes(root: Path, relative: str) -> tuple[bytes | None, str | None]:
+    normalized = relative.replace("\\", "/")
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "blob", f":{normalized}"],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None, f"{normalized} staged bytes could not be inspected"
+    if completed.returncode != 0:
+        return None, f"{normalized} staged bytes could not be inspected"
+    return completed.stdout, None
 
 
 def _check_ignore(root: Path, relative: str) -> tuple[bool, str | None]:
@@ -656,6 +699,80 @@ def _tracked_artifact_findings(tracked: list[str]) -> list[str]:
     return findings
 
 
+def _looks_like_private_quantconnect_result(text: str) -> bool:
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    top_level_keys = {_normalize_key(key) for key in payload}
+    return PRIVATE_RESULT_TOP_LEVEL_KEYS.issubset(top_level_keys)
+
+
+def _private_result_findings(
+    root: Path,
+    candidates: list[str],
+    tracked: list[str],
+) -> list[str]:
+    findings: list[str] = []
+    tracked_set = {relative.replace("\\", "/") for relative in tracked}
+    for candidate in candidates:
+        normalized = candidate.replace("\\", "/")
+        path = Path(normalized)
+        if path.suffix.lower() != ".json" or normalized in ALLOWED_QUANTCONNECT_RESULT_FILES:
+            continue
+
+        private_result = PRIVATE_RESULT_FILENAME.search(path.name) is not None
+        worktree_path = root / normalized
+        if (
+            worktree_path.exists()
+            and worktree_path.is_file()
+            and not worktree_path.is_symlink()
+            and worktree_path.stat().st_size <= 2_000_000
+        ):
+            with suppress(OSError, UnicodeDecodeError):
+                private_result = private_result or _looks_like_private_quantconnect_result(
+                    worktree_path.read_text(encoding="utf-8")
+                )
+
+        if normalized in tracked_set:
+            staged_text, error = _git_index_text(root, normalized)
+            if error is None and staged_text is not None:
+                private_result = private_result or _looks_like_private_quantconnect_result(
+                    staged_text
+                )
+
+        if private_result:
+            findings.append(
+                f"private QuantConnect result JSON is forbidden in the repository: {normalized}"
+            )
+    return findings
+
+
+def _frozen_evidence_findings(
+    root: Path,
+    expected_digests: dict[str, str] | None = None,
+) -> list[str]:
+    findings: list[str] = []
+    bindings = FROZEN_EVIDENCE_SHA256 if expected_digests is None else expected_digests
+    for relative, expected_digest in bindings.items():
+        path = root / relative
+        if not path.exists() or not path.is_file() or path.is_symlink():
+            findings.append(f"frozen evidence is missing or unsafe: {relative}")
+            continue
+
+        if sha256(path.read_bytes()).hexdigest() != expected_digest:
+            findings.append(f"frozen evidence working-tree bytes changed: {relative}")
+
+        staged_bytes, error = _git_index_bytes(root, relative)
+        if error is not None:
+            findings.append(error)
+        elif staged_bytes is not None and sha256(staged_bytes).hexdigest() != expected_digest:
+            findings.append(f"frozen evidence staged bytes changed: {relative}")
+    return findings
+
+
 def _ignore_rule_findings(root: Path) -> list[str]:
     findings: list[str] = []
     for relative in EXPECTED_IGNORED_PATHS:
@@ -710,6 +827,8 @@ def main() -> int:
     findings.extend(_lean_workspace_findings(root, candidates))
     findings.extend(_tracked_lean_metadata_findings(root, tracked))
     findings.extend(_tracked_artifact_findings(tracked))
+    findings.extend(_private_result_findings(root, candidates, tracked))
+    findings.extend(_frozen_evidence_findings(root))
     findings.extend(_ignore_rule_findings(root))
 
     if findings:
@@ -720,7 +839,8 @@ def main() -> int:
 
     print(
         "Preflight passed: required files, public-repository hygiene, credential-free LEAN "
-        "workspace sources, and generated-artifact boundaries were verified."
+        "workspace sources, generated-artifact boundaries, private-result exclusions, and "
+        "frozen evidence hashes were verified."
     )
     return 0
 

@@ -1,21 +1,34 @@
-# LEAN pause decision (superseded)
+# LEAN pause decision history
 
 ## Status
 
-Superseded by ADR 0007 on 2026-07-28.
+The original pause was superseded by ADR 0007 on 2026-07-28, when the owner
+authorized the activation, parity, and fixed walk-forward research phases.
+Those phases are now complete.
 
-Current status: **LEAN active for cloud research/backtesting; live trading remains prohibited.**
+Current Phase 0 status, recorded 2026-08-02:
+
+```text
+LEAN_FIXED_WALK_FORWARD_V1_COMPLETE
+LIVE_STOCK_DEPLOYMENT_DEFERRED
+REASON: CAPITAL_AND_INFRASTRUCTURE_ECONOMICS
+ACTIVE_DEVELOPMENT_TARGET: SEPARATE_FREQTRADE_CRYPTO_SPOT_PROJECT
+```
+
+The completed LEAN implementation and evidence remain preserved and frozen as
+the stock-research reference. No fixed fold rerun or live stock deployment is
+authorized. See `project-status.md`.
 
 This document records why LEAN work was previously paused. It is retained as
-decision history and is not the current operating policy.
+decision history; the Phase 0 record above is the current operating status.
 
-Reason:
+Original reason:
 
 - The current local LEAN CLI path requires a paid QuantConnect organization for
   the workflow the owner tried to use.
 - The owner does not want to spend money on this milestone.
 
-Decision:
+Original decision:
 
 - Do not delete `lean/`.
 - Do not add QuantConnect credentials, organization IDs, cloud tokens, broker
